@@ -5,7 +5,7 @@
 !    two_layer_slide.F
 !
 !    This file contains the subroutines which compute the slope-oriented, two-layer slide
-!    based on granular flow rheology.  This does NOT contain Dmitri's viscous lower layer.
+!    based on granular flow rheology.  This does NOT contain Dmitris viscous lower layer.
 !
 !    fluxes_ll
 !    source_terms_ll
@@ -16,8 +16,8 @@
 !
 !    Model described in:
 !
-!    Ma, G., Kirby, J. T., Hsu, T.-J. and Shi, F., 2015, "A two-layer granular landslide model for
-!        tsunami wave generation: Theory and computation", Ocean Modelling, 93, 40-55, 
+!    Ma, G., Kirby, J. T., Hsu, T.-J. and Shi, F., 2015, A two-layer granular landslide model for
+!        tsunami wave generation: Theory and computation, Ocean Modelling, 93, 40-55, 
 !        doi:10.1016/j.ocemod.2015.07.012 
 !
 !    This file is part of NHWAVE.

@@ -53,9 +53,6 @@
      program NHWAVE
 !
      use global
-# if defined (OBSTACLE)
-     USE IBM_MODULE
-# endif
      implicit none
      integer :: j,Istage
      real(SP) :: tbegin,tend
@@ -105,12 +102,6 @@
 !    initialize model run
 !
      call initial
-
-# if defined (OBSTACLE)
-
-     CALL OBS_INITIALIZATION
-
-# endif
 !
 !    read nesting data (added by Cheng)
 !
@@ -553,9 +544,6 @@
 !    Last update: 25/12/2010, Gangfeng Ma
 !----------------------------------------------
      use global
-# if defined (OBSTACLE)
-     USE IBM_MODULE
-# endif
      implicit none
      integer,intent(in) :: ISTEP
      real(SP), dimension(:), allocatable :: Acoef,Bcoef,Ccoef,Xsol,Rhs0
@@ -3240,8 +3228,7 @@
        iu = 100+n
        write(FILE_NUM(1:4),'(I4.4)') n
        STAT_FILE = TRIM(FDIR)//'probe_'//TRIM(FILE_NUM)
-!       open(iu,file=TRIM(STAT_FILE),access='APPEND') ! append is not good for rerun
-       open(iu,file=TRIM(STAT_FILE))
+       open(iu,file=TRIM(STAT_FILE),access='APPEND')
        
        if(zstat(n).eq.0.0) then
          do j = Jbeg,Jend
@@ -3259,10 +3246,7 @@
          do i = Ibeg,Iend
            if(xstat(n)>=x(i).and.xstat(n)<x(i+1).and.  &
               ystat(n)>=y(j).and.ystat(n)<y(j+1)) then
-             write(iu,'(300E14.6)') time,eta(i,j),(u(i,j,k),v(i,j,k),w(i,j,k),k=Kbeg,Kend)
-
-               ! note Cheng uses 100E14.6 which is not good for more layers, fyshi
-
+             write(iu,'(100E14.6)') time,eta(i,j),(u(i,j,k),v(i,j,k),w(i,j,k),k=Kbeg,Kend)
            endif
          enddo
          enddo
@@ -13597,10 +13581,7 @@ SUBROUTINE hot_start
 ! uvw
 
 
-!     call vel_bc(1)  ! (1) is not an argument, fyshi
-
-     call vel_bc
- 
+     call vel_bc(1)
 # if defined (PARALLEL)
      call phi_3D_exch(U)
      call phi_3D_exch(V)
@@ -13609,8 +13590,7 @@ SUBROUTINE hot_start
 
 # if defined (SALINITY)
 ! sali
-!     call sali_bc(1)  ! (1) is not an argument, fyshi
-     call sali_bc(1) 
+     call sali_bc(1)  
 # endif  
 
      do k = 1,Kloc
@@ -14551,7 +14531,5 @@ SUBROUTINE OneWayCoupling
 END SUBROUTINE OneWayCoupling
 # endif 
 ! end nesting
-
-
 
 !------------------------The End----------------------------------------------

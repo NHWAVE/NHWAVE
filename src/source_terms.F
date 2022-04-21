@@ -10,7 +10,7 @@
 !    call BAD.
 !
 !    Change log:
-!           2/7/19 Kirby modifying wavenumber solver using Eckart's initial guess.
+!           2/7/19 Kirby modifying wavenumber solver using Eckarts initial guess.
 !                  (Should iterate to 10-6 accuracy in two iterations.
 !                  Change Segma to Omega so I can use Sigma when there is a current
 !                  entering through the boundary (not yet - Segma also appears elsewhere)

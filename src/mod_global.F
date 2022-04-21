@@ -150,16 +150,10 @@
      real(SP) :: Por_X0,Por_Xn,Por_Y0,Por_Yn,Por_Z0,Por_Zn
 # endif
 
-# if defined (OBSTACLE)
-     real(SP) :: obs_u,obs_v,obs_w
-     real(SP), dimension(:,:,:), allocatable :: ObsForceX,ObsForceY,ObsForceZ
-     real(SP), dimension(:,:,:), allocatable :: set_dist_x,set_dist_y,set_dist_z
-     integer, dimension(:,:,:), allocatable :: set_flag,set_flag_old
 # if defined (DEFORMABLESLIDE)
      real(SP), dimension(:,:), allocatable :: ObsForceX_gs,ObsForceY_gs,ObsForceZ_gs
      real(SP), dimension(:,:), allocatable :: set_dist_x_gs,set_dist_y_gs,set_dist_z_gs
      integer, dimension(:,:), allocatable :: set_flag_gs,set_flag_gs_old
-# endif
 # endif
 
 # if defined (TWOLAYERSLIDE)

@@ -1342,7 +1342,7 @@
 !
 !    (3) index
 !
-!    This subroutine is used to create work index (what's that?)
+!    This subroutine is used to create work index (whats that?)
 !
 !    Called by: main  
 !                                                              
@@ -1541,15 +1541,10 @@
      ALLOCATE(Porosity(Mloc,Nloc,Kloc),HyCk(Mloc,Nloc,Kloc))
 # endif
 
-# if defined (OBSTACLE)
-     ALLOCATE(set_flag(Mloc,Nloc,Kloc),ObsForceX(Mloc,Nloc,Kloc),ObsForceY(Mloc,Nloc,Kloc), &
-              ObsForceZ(Mloc,Nloc,Kloc),set_dist_x(Mloc,Nloc,Kloc),set_dist_y(Mloc,Nloc,Kloc), &
-              set_dist_z(Mloc,Nloc,Kloc),set_flag_old(Mloc,Nloc,Kloc))
 # if defined (DEFORMABLESLIDE)
      ALLOCATE(ObsForceX_gs(Mloc,Nloc),ObsForceY_gs(Mloc,Nloc),ObsForceZ_gs(Mloc,Nloc), &
               set_dist_x_gs(Mloc,Nloc),set_dist_y_gs(Mloc,Nloc),set_dist_z_gs(Mloc,Nloc), &
               set_flag_gs(Mloc,Nloc),set_flag_gs_old(Mloc,Nloc))
-# endif
 # endif
 
 # if defined (TWOLAYERSLIDE)
@@ -2931,15 +2926,11 @@
 	 call flux_coeff_gs
 # endif
 
-# if defined (OBSTACLE)
-     ObsForceX=Zero;ObsForceY=Zero;ObsForceZ=Zero
-	 set_dist_x=Zero;set_dist_y=Zero;set_dist_z=Zero
-	 set_flag=0;set_flag_old=0;
+
 # if defined (DEFORMABLESLIDE)
      ObsForceX_gs=Zero;ObsForceY_gs=Zero;ObsForceZ_gs=Zero
 	 set_dist_x_gs=Zero;set_dist_y_gs=Zero;set_dist_z_gs=Zero
 	 set_flag_gs=0;set_flag_gs_old=0;
-# endif
 # endif
 
 
