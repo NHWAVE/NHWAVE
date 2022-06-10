@@ -2,7 +2,7 @@
 # CMake build system for NHWAVE
 #
 CMAKE_MINIMUM_REQUIRED (VERSION 3.1.2)
-PROJECT (NHWAVE VERSION 3.0 LANGUAGES Fortran)
+PROJECT (NHWAVE VERSION 3.0 LANGUAGES Fortran C)
 
 # Our own add-ons:
 SET(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/modules/")
@@ -20,6 +20,10 @@ IF (${CMAKE_Fortran_COMPILER_ID} MATCHES "^Intel")
 ELSE()
     SET(IS_INTEL_FORTRAN Off)
 ENDIF()
+
+# Get the C-to-Fortran interface info:
+INCLUDE(FortranCInterface)
+FortranCInterface_HEADER(${CMAKE_BINARY_DIR}/fortran-interfaces.h)
 
 #
 # The various build options.  Almost all of them default to being
@@ -46,6 +50,7 @@ OPTION(POROUSMEDIA "Include generic porous media terms." OFF)
 OPTION(FROUDE_CAP "Include maximum Froude number limiting terms." OFF)
 OPTION(COUPLING "Enable computational nesting." OFF)
 OPTION(FLUIDSLIDE "Include fluid slide terms." OFF)
+OPTION(HYPRE_CUDA "HYPRE library uses CUDA functionality." OFF)
 
 # We need HYPRE:
 FIND_PACKAGE(HYPRE REQUIRED)
@@ -58,7 +63,7 @@ ENDIF()
 #
 # The product:
 #
-ADD_EXECUTABLE(nhwave
+LIST(APPEND NHWAVE_SOURCES
         mod_global.F
         mod_util.F
         initialize.F
@@ -68,10 +73,13 @@ ADD_EXECUTABLE(nhwave
         source_terms.F
         waves.F
         pressure.F
-        nhwave.F 
+        hypre_utils.c
+        nhwave.F
     )
+ADD_EXECUTABLE(nhwave ${NHWAVE_SOURCES})
+
 # The executable must link against HYPRE:
-TARGET_INCLUDE_DIRECTORIES(nhwave PUBLIC ${HYPRE_INCLUDE_DIRS})
+TARGET_INCLUDE_DIRECTORIES(nhwave PUBLIC ${HYPRE_INCLUDE_DIRS} ${CMAKE_BINARY_DIR})
 TARGET_LINK_LIBRARIES(nhwave ${HYPRE_LIBRARY})
 
 # The executable optionally links against an MPI library:

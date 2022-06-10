@@ -58,11 +58,12 @@
      real(SP) :: tbegin,tend
 
 # if defined (PARALLEL)
-     call MPI_INIT(ier)
+     call MPI_Init(ier)
      call MPI_COMM_RANK(MPI_COMM_WORLD,myid,ier)
      call MPI_COMM_SIZE(MPI_COMM_WORLD,NumP,ier)
+     call nhwave_hypre_init()
 # endif
-!
+
 !-----------------------------------------------------------------------------------------
 !
 !    Model configuration
