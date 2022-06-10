@@ -76,6 +76,11 @@ LIST(APPEND NHWAVE_SOURCES
         hypre_utils.c
         nhwave.F
     )
+IF (NOT ${PARALLEL))
+    LIST(APPEND NHWAVE_SOURCES
+            nspcg.f
+        )
+ENDIF()
 ADD_EXECUTABLE(nhwave ${NHWAVE_SOURCES})
 
 # The executable must link against HYPRE:
