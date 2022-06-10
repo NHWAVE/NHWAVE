@@ -59,7 +59,8 @@
 !----------------------------------------------------------------------------------------------
 !
       subroutine wave_dispersion(Segma, Wave_Number)
-!
+!  call has three arguments! remove dep_wave which is included in global, fyshi
+
       use global, only: SP,Dep_Wave, Grav
       implicit none
       real(SP) :: Segma, Wave_Number,Wn_new, error,Fk,Fkdif
@@ -121,7 +122,7 @@
       if(Zero1<0.0) then
           Zup = Zmid
           Zmid = (Zup+Zlow)/2.0
-          goto 200 !goto's???
+          goto 200 !goto???
       else
           Zlow = Zmid
           Zmid = (Zup+Zlow)/2.0
@@ -582,7 +583,10 @@
      do nfreq = 1,NumFreq
        Per_Wave = 1.0/Freq(nfreq)
        Segma = 2.0*pi/Per_Wave
-       call wave_dispersion(dep_wave, Segma, Wave_Number)
+
+!       call wave_dispersion(dep_wave, Segma, Wave_Number) ! remove dep_wave which is in global
+       call wave_dispersion(Segma, Wave_Number)
+
        Wave_Length = 2.0*pi/Wave_Number
        Celerity = Wave_Length/Per_Wave
 !

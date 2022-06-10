@@ -14,7 +14,7 @@ Nglob = 1
 Kglob = 20
 
 ! --------------------PROCESSOR NUMBER-------------------------
-PX = 8
+PX = 4
 PY = 1
 
 ! -----------------------TIME----------------------------------
@@ -23,8 +23,8 @@ PY = 1
 SIM_STEPS = 1000000000
 TOTAL_TIME = 20.0
 PLOT_START = 0.0
-PLOT_INTV =  0.02
-SCREEN_INTV = 0.02
+PLOT_INTV =  1.0
+SCREEN_INTV = 1.0
 
 ! ------------------------GRID----------------------------------
 ! grid sizes

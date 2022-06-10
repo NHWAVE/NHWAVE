@@ -1,7 +1,7 @@
 !=======================================================================
 ! OSCAR Input Utility Module         
 !
-! This is a module adopted from Cowles's mod_newinp.F and modified by 
+! This is a module adopted from Cowles mod_newinp.F and modified by 
 ! Gangfeng Ma to facilitate input in the NHWAVE model.  
 !=======================================================================
 

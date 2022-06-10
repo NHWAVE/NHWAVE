@@ -146,7 +146,7 @@
 !
 !   fyshi gave boundary condition for dry cells
 !   set zero for dry set is inaccurate
-!   dry cells  (so what was actually done??)
+!   dry cells  (so what was actually done)
 !
 !     do k = Kbeg,Kend
 !     do j = Jbeg,Jend
@@ -475,6 +475,9 @@
      subroutine generate_coef_rhs
 !
      use global
+# if defined (OBSTACLE)
+     USE IBM_MODULE
+# endif
      implicit none
      integer :: i,j,k,neq,n,ic
      real(SP), dimension(:,:,:), allocatable :: DelxS,DelyS,DelzS,A1
