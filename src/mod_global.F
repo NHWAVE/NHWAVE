@@ -367,4 +367,93 @@
      integer,  dimension(:),   allocatable :: JCoefgs
      real(SP), dimension(:,:), allocatable :: Coefgs
 # endif
+
+     Contains
+
+         !
+         ! The following are a set of common mathematical
+         ! functions that use the same name regardless of
+         ! configured floating-point size.  E.g. code can
+         ! use nhsqrt() and sqrt() or dsqrt() will be
+         ! called behind the scenes, as directed by the
+         ! DOUBLE_PRECISION flag.
+         !
+
+         Function nhsqrt(v)
+             Implicit None
+             real(SP), intent(in)    :: v
+             real(SP)                :: nhsqrt
+#     if defined (DOUBLE_PRECISION)
+             nhsqrt = dsqrt(v)
+#     else
+             nhsqrt = sqrt(v)
+#     endif
+         End Function nhsqrt
+
+         Function nhabs(v)
+             Implicit None
+             real(SP), intent(in)    :: v
+             real(SP)                :: nhabs
+#     if defined (DOUBLE_PRECISION)
+             nhabs = dabs(v)
+#     else
+             nhabs = abs(v)
+#     endif
+         End Function nhabs
+
+         Function nhcos(v)
+             Implicit None
+             real(SP), intent(in)    :: v
+             real(SP)                :: nhcos
+#     if defined (DOUBLE_PRECISION)
+             nhcos = dcos(v)
+#     else
+             nhcos = cos(v)
+#     endif
+         End Function nhcos
+
+         Function nhsin(v)
+             Implicit None
+             real(SP), intent(in)    :: v
+             real(SP)                :: nhsin
+#     if defined (DOUBLE_PRECISION)
+             nhsin = dsin(v)
+#     else
+             nhsin = sin(v)
+#     endif
+         End Function nhsin
+
+         Function nhlog(v)
+             Implicit None
+             real(SP), intent(in)    :: v
+             real(SP)                :: nhlog
+#     if defined (DOUBLE_PRECISION)
+             nhlog = dlog(v)
+#     else
+             nhlog = log(v)
+#     endif
+         End Function nhlog
+
+         Function nhmin1(v1, v2)
+             Implicit None
+             real(SP), intent(in)    :: v1, v2
+             real(SP)                :: nhmin1
+#     if defined (DOUBLE_PRECISION)
+             nhmin1 = dmin1(v1, v2)
+#     else
+             nhmin1 = min1(v1, v2)
+#     endif
+         End Function nhmin1
+
+         Function nhmax1(v1, v2)
+             Implicit None
+             real(SP), intent(in)    :: v1, v2
+             real(SP)                :: nhmax1
+#     if defined (DOUBLE_PRECISION)
+             nhmax1 = dmax1(v1, v2)
+#     else
+             nhmax1 = max1(v1, v2)
+#     endif
+         End Function nhmax1
+
      End Module GLOBAL
