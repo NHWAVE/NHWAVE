@@ -148,6 +148,9 @@ LIST(APPEND NHWAVE_SOURCES
         source_terms.F
         waves.F
         pressure.F
+        NHWAVE_HYPRE_StructVectorSetBoxValues.c
+        NHWAVE_HYPRE_StructVectorGetBoxValues.c
+        NHWAVE_HYPRE_StructMatrixSetBoxValues.c
         nhwave.F
     )
 IF (${PARALLEL})

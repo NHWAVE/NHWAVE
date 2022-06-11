@@ -365,8 +365,8 @@
      enddo
      enddo
 
-     call HYPRE_StructMatrixSetBoxValues(matrix,ilower,iupper,nentries,  &
-                                  stencil_indices,values,ierr) 
+     call NHWAVE_HYPRE_StructMatrixSetBoxValues(matrix,ilower,iupper,nentries,  &
+                                  stencil_indices,nvalues,values,ierr) 
      call HYPRE_StructMatrixAssemble(matrix,ierr)
      !call HYPRE_StructMatrixPrint(matrix,zero,ierr)
 !
@@ -379,7 +379,7 @@
      call HYPRE_StructVectorInitialize(vec_x,ierr)
 !
 ! set the vector coefficients
-     call HYPRE_StructVectorSetBoxValues(vec_b,ilower,iupper,Rhs,ierr)   
+     call NHWAVE_HYPRE_StructVectorSetBoxValues(vec_b,ilower,iupper,neqns,Rhs,ierr)   
      call HYPRE_StructVectorAssemble(vec_b,ierr)     
      !call HYPRE_StructVectorPrint(vec_b,zero,ierr)
 
@@ -393,7 +393,7 @@
      enddo
      enddo
      
-     call HYPRE_StructVectorSetBoxValues(vec_x,ilower,iupper,Phi,ierr)
+     call NHWAVE_HYPRE_StructVectorSetBoxValues(vec_x,ilower,iupper,neqns,Phi,ierr)
      call HYPRE_StructVectorAssemble(vec_x,ierr)
      !call HYPRE_StructVectorPrint(vec_x,zero,ierr)
 
@@ -425,7 +425,7 @@
      call HYPRE_StructGMRESSolve(solver,matrix,vec_b,vec_x,ierr)
 
 ! get results
-     call HYPRE_StructVectorGetBoxValues(vec_x,ilower,iupper,Phi,ierr)
+     call NHWAVE_HYPRE_StructVectorGetBoxValues(vec_x,ilower,iupper,neqns,Phi,ierr)
 
      do k = Kbeg,Kend
      do j = Jbeg,Jend
