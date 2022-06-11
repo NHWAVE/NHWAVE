@@ -1,7 +1,7 @@
 #
 # CMake build system for NHWAVE
 #
-CMAKE_MINIMUM_REQUIRED (VERSION 3.1.2)
+CMAKE_MINIMUM_REQUIRED (VERSION 3.8)
 PROJECT (NHWAVE VERSION 3.0 LANGUAGES Fortran C)
 
 # Our own add-ons:
@@ -10,6 +10,12 @@ SET(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/modules/")
 # Must use GNUInstallDirs to install libraries into correct
 # locations on all platforms.
 INCLUDE(GNUInstallDirs)
+
+# For preserving config around source checks:
+INCLUDE(CMakePushCheckState)
+
+# Check execution of code tests:
+INCLUDE(CheckCSourceCompiles)
 
 # Fortran source should be treated as free-format:
 SET(CMAKE_Fortran_FORMAT "FREE")
@@ -31,8 +37,34 @@ FortranCInterface_HEADER(${CMAKE_BINARY_DIR}/fortran-interfaces.h)
 # identified by CMake as being Intel-branded, then the INTEL option
 # defaults to enabled/on.
 #
+# Another notable exception is the HYPRE_CUDA option, which gets
+# auto-detected once the HYPRE library is found.
+#
+SET(OPTION_NAMES
+        PARALLEL
+        DOUBLE_PRECISION
+        LANDSLIDE
+        LANDSLIDE_COMPREHENSIVE
+        TWOLAYERSLIDE
+        DEFORMABLESLIDE
+        SALINITY
+        TEMPERATURE
+        BUBBLE
+        SEDIMENT
+        VEGETATION
+        INTEL
+        BALANCE2D
+        OBSTACLE
+        CORALREEF
+        POROUSMEDIA
+        FROUDE_CAP
+        COUPLING
+        FLUIDSLIDE
+        HYPRE_CUDA
+    )
+#
+OPTION(PARALLEL "Include MPI parallelism; requires the HYPRE library." OFF)
 OPTION(DOUBLE_PRECISION "Floating-point compution in double- rather than single-precision." OFF)
-OPTION(PARALLEL "Include MPI parallelism." OFF)
 OPTION(LANDSLIDE "Include landslide terms." OFF)
 OPTION(LANDSLIDE_COMPREHENSIVE "Include comprehensive landslide terms." OFF)
 OPTION(TWOLAYERSLIDE "Include multi-layer landslide terms." OFF)
@@ -50,18 +82,61 @@ OPTION(POROUSMEDIA "Include generic porous media terms." OFF)
 OPTION(FROUDE_CAP "Include maximum Froude number limiting terms." OFF)
 OPTION(COUPLING "Enable computational nesting." OFF)
 OPTION(FLUIDSLIDE "Include fluid slide terms." OFF)
-OPTION(HYPRE_CUDA "HYPRE library uses CUDA functionality." OFF)
 
-# We need HYPRE:
-FIND_PACKAGE(HYPRE REQUIRED)
-
-# If PARALLEL is selected, we need an MPI compiler:
+#
+# If PARALLEL is enabled, we need to find HYPRE and MPI libraries:
+#
 IF (${PARALLEL})
-   FIND_PACKAGE(MPI REQUIRED)
+    # We need HYPRE:
+    FIND_PACKAGE(HYPRE REQUIRED)
+
+    # Also need MPI:
+    FIND_PACKAGE(MPI REQUIRED)
+
+    # Check if HYPRE PARALLEL and GPU functionality are present:
+    CMAKE_PUSH_CHECK_STATE()
+        SET(CMAKE_REQUIRED_LIBRARIES ${HYPRE_LIBRARY})
+        SET(CMAKE_REQUIRED_INCLUDES ${HYPRE_INCLUDE_DIRS})
+
+        CHECK_C_SOURCE_COMPILES("
+            #include \"_hypre_utilities.h\"
+            #include \"HYPRE.h\"
+            int
+            main()
+            {
+                #ifdef HYPRE_SEQUENTIAL
+                #error FAILED:  HYPRE NOT PARALLEL
+                #endif
+                return 0;
+            }
+            "
+            HAS_HYPRE_PARALLEL
+        )
+        IF (NOT ${HAS_HYPRE_PARALLEL} )
+            MESSAGE(FATAL_ERROR "NHWAVE PARALLEL option selected but HYPRE library lacks parallelism.")
+        ENDIF()
+    
+        CHECK_C_SOURCE_COMPILES("
+            #include \"_hypre_utilities.h\"
+            #include \"HYPRE.h\"
+            int
+            main()
+            {
+                #ifndef HYPRE_USING_GPU
+                #error FAILED:  MISSING HYPRE_USING_GPU
+                #endif
+                return 0;
+            }
+            "
+            HAS_HYPRE_CUDA
+        )
+        OPTION(HYPRE_CUDA "HYPRE library uses CUDA functionality." ${HAS_HYPRE_CUDA})
+        
+    CMAKE_POP_CHECK_STATE()
 ENDIF()
 
 #
-# The product:
+# List of source files that comprise the executable we wish to build:
 #
 LIST(APPEND NHWAVE_SOURCES
         mod_global.F
@@ -73,33 +148,34 @@ LIST(APPEND NHWAVE_SOURCES
         source_terms.F
         waves.F
         pressure.F
-        hypre_utils.c
         nhwave.F
     )
-IF (NOT ${PARALLEL))
+IF (${PARALLEL})
+    IF (${HYPRE_CUDA})
+        LIST(APPEND NHWAVE_SOURCES
+                hypre_bind_device.c
+            )
+    ENDIF()
+ELSE()
     LIST(APPEND NHWAVE_SOURCES
             nspcg.f
         )
 ENDIF()
+
+#
+# Add the "nhwave" executable target:
+#
 ADD_EXECUTABLE(nhwave ${NHWAVE_SOURCES})
 
-# The executable must link against HYPRE:
-TARGET_INCLUDE_DIRECTORIES(nhwave PUBLIC ${HYPRE_INCLUDE_DIRS} ${CMAKE_BINARY_DIR})
-TARGET_LINK_LIBRARIES(nhwave ${HYPRE_LIBRARY})
-
-# The executable optionally links against an MPI library:
 IF (${PARALLEL})
-    TARGET_INCLUDE_DIRECTORIES(nhwave PUBLIC ${MPI_INCLUDE_DIRS})
-    TARGET_LINK_LIBRARIES(nhwave ${MPI_Fortran_LIB_NAMES})
+    # The executable must link against HYPRE and MPI:
+    TARGET_INCLUDE_DIRECTORIES(nhwave PUBLIC ${HYPRE_INCLUDE_DIRS} ${MPI_INCLUDE_DIRS} ${CMAKE_BINARY_DIR})
+    TARGET_LINK_LIBRARIES(nhwave ${HYPRE_LIBRARY} ${MPI_Fortran_LIB_NAMES})
     TARGET_LINK_DIRECTORIES(nhwave PUBLIC ${MPI_Fortran_MODULE_DIR})
 ENDIF()
 
 # Add preprocessing flags for each option enabled:
-FOREACH(OPTION_FLAG
-        DOUBLE_PRECISION PARALLEL LANDSLIDE LANDSLIDE_COMPREHENSIVE TWOLAYERSLIDE DEFORMABLESLIDE
-        SALINITY TEMPERATURE BUBBLE SEDIMENT VEGETATION INTEL BALANCE2D OBSTACLE CORALREEF POROUSMEDIA
-        FROUDE_CAP COUPLING FLUIDSLIDE
-    )
+FOREACH(OPTION_FLAG ${OPTION_NAMES})
     IF ( ${${OPTION_FLAG}} )
         TARGET_COMPILE_DEFINITIONS(nhwave PUBLIC ${OPTION_FLAG})
     ENDIF()

@@ -54,6 +54,10 @@
 !
      use global
      implicit none
+# if defined (PARALLEL)
+     include 'HYPREf.h'
+# endif
+
      integer :: j,Istage
      real(SP) :: tbegin,tend
 
@@ -61,7 +65,16 @@
      call MPI_Init(ier)
      call MPI_COMM_RANK(MPI_COMM_WORLD,myid,ier)
      call MPI_COMM_SIZE(MPI_COMM_WORLD,NumP,ier)
-     call nhwave_hypre_init()
+
+#    if defined (HYPRE_CUDA)
+         call HYPRE_Bind_Device()
+#    endif
+     call HYPRE_Init(ier)
+#    if defined (HYPRE_CUDA)
+     call HYPRE_SetMemoryLocation(HYPRE_MEMORY_DEVICE, ier)
+     call HYPRE_SetExecutionPolicy(HYPRE_EXEC_DEVICE, ier)
+     call HYPRE_SetSpGemmUseVendor(0, ier)
+#    endif
 # endif
 
 !-----------------------------------------------------------------------------------------
