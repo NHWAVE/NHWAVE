@@ -1,0 +1,168 @@
+# Changelog
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+### Changed
+- Precision-variant intrinsic functions (e.g. `nhabs()`) added to the globals module
+    - Depending on DOUBLE_PRECISION preprocessor option, some calls to double- or single-precision intrinsics require entension/loss of precision
+    - Passing a double-precision value to `sin()` drops precision then reextends precision when assigning to a double-precision variable
+
+### Added
+- Build descriptor file (CMakeLists.txt) and support files directory (cmake) added
+    - Automated detection of HYPRE and MPI libraries
+    - Existing preprocessor options implemented as boolean CMake options
+    - HYPRE_CUDA preprocessor option added (with auto-detect from HYPRE library)
+- Added C HYPRE utility source file for low-level operations
+    - Initialization of HYPRE GPU functionality
+    - May be unnecessary if Fortran API also implements these functionalities
+
+
+## [Untagged] - 2021-02-16
+
+UPDATE_00012, Cheng Zhang
+
+### Changed
+- Update landslide model
+    - Change surface gradient method (SGM) in TVD scheme to upwind method for source terms to avoiding negative depth at cell face and ensure well-balance property
+    - Changed the flux boundary condition at wet-dry boundary to avoid numerical oscillation
+    - Change cell-center based method of non-hydrostatic model to cell-corner based method to avoid numerical osscillation of non-hydrostatic pressure
+    - Add a dispersion correction term into governing equations to improve vertical effect of motion.
+    - Add immersed boundary method (IBM) for slide-structureinteractions.
+
+
+
+## [Untagged] - 2019-05-28
+
+UPDATE_00011, Cheng Zhang
+
+### Changed
+- Changed the flux boundary condition at wet-dry boundary to avoid numerical oscillation.
+
+### Added
+- Added subroutines to simulate deformable landslide for granular and viscous flow.
+
+
+
+## [Untagged] - 2019-02-20
+
+UPDATE_00010, J. Kirby
+
+### Changed
+- Corrected two typos in waves.F
+- Moved subroutines related to Poisson solver from nhwave.F to pressure.F
+
+
+
+## [Untagged] - 2019-02-11
+
+UPDATE_00009, J. Kirby
+
+### Changed
+- Corrected error made in wave_dispersion subroutine.
+- Changed some of the copyright statements (gnu -> bsd)
+
+
+
+## [Untagged] - 2019-02-08
+
+UPDATE_00008, J. Kirby
+
+### Changed
+- Collected all known instances (so far) of solutions of linear dispersion relation and replaced by a call to new subroutine wave\_dispersion.
+
+### Added
+- Created new file waves.F that contains wave\_dispersion plus boundary or initial wave generation.
+    - subroutine source\_terms remains to be modified (to extract portions that only need to be executed once)
+    - subroutines in waves.F all extracted from nhwave.F except for the new wave\_dispersion
+
+
+## [Untagged] - 2018-02-04
+
+UPDATE_00007, Cheng Zhang
+
+### Changed
+- Changed the IBM code to be applicable to the hydrostatic case. 
+
+### Added
+- Added a function to simulate slump case of rigid landslide.
+
+
+
+## [3.0.0] - 2017-04-12
+
+UPDATE_00006, Cheng Zhang
+
+### Fixed
+- Fixed a bug in subroutine update\_mask to ensure a wet-dry front moves correctly indepedent on the direction.
+- Fixed a bug in subroutine eval\_duvw that can lead non-zero DU/DV/DW in grid with Mask(i,j)=0.
+- Fixed a bug in wall friction boundary condition.
+
+### Changed
+- Changed delxH and delyxH at the edge of wet-dry boundary by using Mask9 to avoid extremely height slope at that place.
+ 
+### Added
+- Added a function to hot start simulation with viscous landslide.
+
+
+
+## [Untagged] - 2017-06-02
+
+UPDATE_00005, Cheng Zhang
+
+### Changed
+- Changed influx boundary condition to impose fixed flux.
+
+
+
+## [Untagged] - 2017-05-09
+
+UPDATE_00004, Cheng Zhang
+
+### Fixed
+- Fixed a bug that can cause parallelization problem.
+- Fixed two bugs in the granular slide model.
+
+### Changed
+- Changed the old viscous slide model with a new one with TVD scheme, removing artificial diffusion from mass conservation and double counted bottom friction from momentum equations.
+
+
+
+## [Untagged] - 2017-03-08
+
+UPDATE_00002, Cheng Zhang
+
+### Changed
+- Changed long sentences to short ones to avoid compile problems.
+
+### Added
+- Added a subroutine for fluid slide simulation.
+- Added a subroutine for comprehensive landslide bathymetry discription (from Fengyan).
+- Added a function to impose wall friction on east, west, south and/or north walls.
+- Added a function to identify 2D and 3D solid slide in input file.
+- Added a function for 3D solid triangular slide.
+
+
+
+## [Untagged] - 2016-11-23
+
+UPDATE_00001, Cheng Zhang
+
+### Fixed
+- Fixed two bugs that leaded to unstability since two variables were not initialized.
+
+### Changed
+- Changed Sommerfeld open boundary condition to Orlanski open boundary condition.
+- Changed subroutine flux\_left\_right_boundary to impose velocity at inflow boundary.
+- Changed subroutine probes to output velocity components at each layer when setting z=-1.0 in stat.txt
+
+### Added
+- Added a function to record max runup of wave.
+- Added a function to record varying bathymetry.
+- Added a function to hot start simulation.
+- Added a function to limit max maximum Froude number.
+- Added a function to generate irregular waves with a internal wave maker.
+- Added a function to impose nesting data as boundary conditions.

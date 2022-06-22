@@ -276,7 +276,7 @@
 !----------------------------------------------------------------
 !    Cnoidal Function
 !----------------------------------------------------------------
-     use global, only: SP
+     use global
      implicit none
 
      real(SP), intent(in) :: mod
@@ -285,9 +285,9 @@
 
      mod1 = 1.0-mod
      cnoidal_ck = 0.0
-     a0 = 1.0
-     b0 = dsqrt(mod1)
-     c0 = dsqrt(mod)
+     a0 = 1.0d0
+     b0 = nhsqrt(mod1)
+     c0 = nhsqrt(mod)
      n = 1
 
  15  if(abs(c0)<1.0e-15.or.n>1000) then
@@ -295,7 +295,7 @@
      else
        n = n+1
        a1 = (a0+b0)/2.0
-       b1 = sqrt(a0*b0)
+       b1 = nhsqrt(a0*b0)
        c1 = (a0-b0)/2.0
 
        a0 = a1
@@ -582,7 +582,7 @@
      do nfreq = 1,NumFreq
        Per_Wave = 1.0/Freq(nfreq)
        Segma = 2.0*pi/Per_Wave
-       call wave_dispersion(dep_wave, Segma, Wave_Number)
+       call wave_dispersion(Segma, Wave_Number)
        Wave_Length = 2.0*pi/Wave_Number
        Celerity = Wave_Length/Per_Wave
 !
@@ -637,9 +637,7 @@
 !
      subroutine focused_wave_left_boundary
 !
-     use global, only: Amp_i,k_i,f_i,nwave,x_breaking,t_breaking,depth_comp,sd_return, &
-          SP,pi,Zero,Ibeg,Grav,TIME,Nloc,Hfx,Jbeg,Jend,Kbeg,Kend,sigc,dy, &
-          Ein_X0,Din_X0,Uin_X0,Vin_X0,Win_X0,myid
+     use global
 !
 # if defined (INTEL)
      use IFPORT, only: rand
@@ -660,7 +658,7 @@
        Segma_i(nw) = 2. * pi * f_i(nw)
        c_i(nw) = segma_i(nw) / k_i(nw) 
        eta_i(nw) = Amp_i(nw) * &
-         dcos( -k_i(nw) * x_breaking - segma_i(nw) * (tc - t_breaking) )
+         nhcos( -k_i(nw) * x_breaking - segma_i(nw) * (tc - t_breaking) )
        Stokes_Drift_i(nw) = Grav * Amp_i(nw) ** 2 / c_i(nw) / depth_comp / 2.
      end do
 
@@ -679,11 +677,11 @@
        Win_X0(j,k) = Zero
        do nw = 1 , nwave
          Uin_X0(j,k) = Uin_X0(j,k) + Grav * Amp_i(nw) * k_i(nw) / Segma_i(nw) * cosh( k_i(nw)*Zlev ) /  &
-           cosh( k_i(nw)*(depth_comp+Ein_X0(j)) ) * dcos(-k_i(nw)*x_breaking - Segma_i(nw)*(tc-t_breaking)) &
+           cosh( k_i(nw)*(depth_comp+Ein_X0(j)) ) * nhcos(-k_i(nw)*x_breaking - Segma_i(nw)*(tc-t_breaking)) &
            - Stokes_Drift_i(nw) * (2*k_i(nw)*depth_comp) / sinh(2*k_i(nw)*(depth_comp+Ein_X0(j))) * &
            cosh(2*k_i(nw)*Zlev) * sd_return
          Win_X0(j,k) = Win_X0(j,k) + Grav * Amp_i(nw) * k_i(nw) / Segma_i(nw) * sinh( k_i(nw)*Zlev ) / &
-           cosh( k_i(nw)*(depth_comp+Ein_X0(j)) ) * dsin(-k_i(nw)*x_breaking - Segma_i(nw)*(tc-t_breaking))
+           cosh( k_i(nw)*(depth_comp+Ein_X0(j)) ) * nhsin(-k_i(nw)*x_breaking - Segma_i(nw)*(tc-t_breaking))
        enddo
        Vin_X0(j,k) = Zero
      enddo         

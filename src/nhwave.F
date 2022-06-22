@@ -54,15 +54,29 @@
 !
      use global
      implicit none
+# if defined (PARALLEL)
+     include 'HYPREf.h'
+# endif
+
      integer :: j,Istage
      real(SP) :: tbegin,tend
 
 # if defined (PARALLEL)
-     call MPI_INIT(ier)
+     call MPI_Init(ier)
      call MPI_COMM_RANK(MPI_COMM_WORLD,myid,ier)
      call MPI_COMM_SIZE(MPI_COMM_WORLD,NumP,ier)
+
+#    if defined (HYPRE_CUDA)
+         call HYPRE_Bind_Device()
+#    endif
+     call HYPRE_Init(ier)
+#    if defined (HYPRE_CUDA)
+     call HYPRE_SetMemoryLocation(HYPRE_MEMORY_DEVICE, ier)
+     call HYPRE_SetExecutionPolicy(HYPRE_EXEC_DEVICE, ier)
+     call HYPRE_SetSpGemmUseVendor(0, ier)
+#    endif
 # endif
-!
+
 !-----------------------------------------------------------------------------------------
 !
 !    Model configuration
@@ -722,7 +736,7 @@
              Bcoef(Nlen) = (1.0+Cp_Por(i,j,k))-Acoef(Nlen)-Ccoef(Nlen)
            endif
  
-           Umag = dsqrt(U(i,j,k)**2+V(i,j,k)**2+W(i,j,k)**2)
+           Umag = nhsqrt(U(i,j,k)**2+V(i,j,k)**2+W(i,j,k)**2)
            Xkc = max(abs(U(i,j,k)),0.01)*max(1.0,Per_Wave)/D50_Por
            Bcoef(Nlen) = Bcoef(Nlen)+dt*(Ap_Por(i,j,k)+Bp_Por(i,j,k)*(1+7.5/Xkc)*Umag)
 # else        
@@ -882,7 +896,7 @@
              Bcoef(Nlen) = (1.0+Cp_Por(i,j,k))-Acoef(Nlen)-Ccoef(Nlen)
            endif
 
-           Umag = dsqrt(U(i,j,k)**2+V(i,j,k)**2+W(i,j,k)**2)
+           Umag = nhsqrt(U(i,j,k)**2+V(i,j,k)**2+W(i,j,k)**2)
            Xkc = max(abs(V(i,j,k)),0.01)*max(1.0,Per_Wave)/D50_Por
            Bcoef(Nlen) = Bcoef(Nlen)+dt*(Ap_Por(i,j,k)+Bp_Por(i,j,k)*(1.0+7.5/Xkc)*Umag)
 
@@ -1045,7 +1059,7 @@
              Bcoef(Nlen) = (1.0+Cp_Por(i,j,k))-Acoef(Nlen)-Ccoef(Nlen)
            endif
 
-           Umag = dsqrt(U(i,j,k)**2+V(i,j,k)**2+W(i,j,k)**2)
+           Umag = nhsqrt(U(i,j,k)**2+V(i,j,k)**2+W(i,j,k)**2)
            Xkc = max(abs(W(i,j,k)),0.01)*max(1.0,Per_Wave)/D50_Por
            Bcoef(Nlen) = Bcoef(Nlen)+  &
                          dt*(Ap_Por(i,j,k)+Bp_Por(i,j,k)*(1.0+7.5/Xkc)*Umag)
@@ -3185,18 +3199,18 @@
      if(myid.eq.0) then
 # endif
      ! print screen
-     WRITE(*,*),'----------------- STATISTICS ----------------'
-     WRITE(*,*),' TIME        DT         DT_CONSTRAINT'
+     WRITE(*,*) '----------------- STATISTICS ----------------'
+     WRITE(*,*) ' TIME        DT         DT_CONSTRAINT'
      WRITE(*,102) TIME,dt,TRIM(dt_constraint)
      WRITE(*,103) ' MassVolume  Energy      MaxEta      MinEta      MaxU       MaxV       MaxW       MaxS       MinS'
      WRITE(*,101) MassVolume,Energy,MaxEta,MinEta,MaxU,MaxV,MaxW,MaxS,MinS
 
      ! print log file 
-     WRITE(3,*),'----------------- STATISTICS ----------------'
-     WRITE(3,*),' TIME        DT         DT_CONSTRAINT'
+     WRITE(3,*) '----------------- STATISTICS ----------------'
+     WRITE(3,*) ' TIME        DT         DT_CONSTRAINT'
      WRITE(3,102) TIME,dt,TRIM(dt_constraint)
      WRITE(3,103) ' MassVolume  Energy      MaxEta      MinEta      MaxU       MaxV       MaxW       MaxS       MinS'
-     WRITE(3,101), MassVolume,Energy,MaxEta,MinEta,MaxU,MaxV,MaxW,MaxS,MinS
+     WRITE(3,101) MassVolume,Energy,MaxEta,MinEta,MaxU,MaxV,MaxW,MaxS,MinS
 # if defined (PARALLEL)
      endif
 # endif
@@ -3953,7 +3967,7 @@
            Cdrag = 1./(1./Kappa*log(30.0*dx/2.0/Zob))**2
          endif
          Phi = dx*Cdrag*sqrt(V(Ibeg,j,k)**2+W(Ibeg,j,k)**2)/(Cmu(Ibeg,j,k)+CmuHt(Ibeg,j,k))
-         Phi = dmin1(Phi,2.0)
+         Phi = nhmin1(Phi,2.0_SP)
          do i =1,Nghost
            U(Ibeg-i,j,k) = -U(Ibeg+i-1,j,k)
            V(Ibeg-i,j,k) = (1.0-Phi)*V(Ibeg+i-1,j,k)
@@ -4032,7 +4046,7 @@
            Cdrag = 1./(1./Kappa*log(30.0*dx/2.0/Zob))**2
          endif
          Phi = dx*Cdrag*sqrt(V(Iend,j,k)**2+W(Iend,j,k)**2)/(Cmu(Iend,j,k)+CmuHt(Iend,j,k))
-         Phi = dmin1(Phi,2.0)
+         Phi = nhmin1(Phi,2.0_SP)
          do i =1,Nghost
            U(Iend+i,j,k) = -U(Iend-i+1,j,k)
            V(Iend+i,j,k) = (1.0-Phi)*V(Iend-i+1,j,k)
@@ -4124,7 +4138,7 @@
            Cdrag = 1./(1./Kappa*log(30.0*dy/2.0/Zob))**2
          endif
          Phi = dy*Cdrag*sqrt(U(i,Jbeg,k)**2+W(i,Jbeg,k)**2)/(Cmu(i,Jbeg,k)+CmuHt(i,Jbeg,k))
-         Phi = dmin1(Phi,2.0)
+         Phi = nhmin1(Phi,2.0_SP)
          do j =1,Nghost
            U(i,Jbeg-j,k) = (1.0-Phi)*U(i,Jbeg+j-1,k)
            V(i,Jbeg-j,k) = -V(i,Jbeg+j-1,k)
@@ -4185,7 +4199,7 @@
            Cdrag = 1./(1./Kappa*log(30.0*dy/2.0/Zob))**2
          endif
          Phi = dy*Cdrag*sqrt(U(i,Jend,k)**2+W(i,Jend,k)**2)/(Cmu(i,Jend,k)+CmuHt(i,Jend,k))
-         Phi = dmin1(Phi,2.0)
+         Phi = nhmin1(Phi,2.0_SP)
          do j =1,Nghost
            U(i,Jend+j,k) = (1.0-Phi)*U(i,Jend-j+1,k)
            V(i,Jend+j,k) = -V(i,Jend-j+1,k)
@@ -4254,7 +4268,7 @@
 # endif
        endif
        Phi = 2.0*Dz1*Cdrag*sqrt(U(i,j,Kbeg)**2+V(i,j,Kbeg)**2)/(Cmu(i,j,Kbeg)+CmuVt(i,j,Kbeg))
-       Phi = dmin1(Phi,2.0)
+       Phi = nhmin1(Phi,2.0_SP)
 
        if(Bc_Z0==1) then  ! free-slip
          !Wbot = -DeltH(i,j)-U(i,j,Kbeg)*DelxH(i,j)-V(i,j,Kbeg)*DelyH(i,j)
@@ -4490,7 +4504,7 @@
            Cdrag = 1./(1./Kappa*log(30.0*dx/2.0/Zob))**2
          endif
          Phi = dx*Cdrag*sqrt(V(Ibeg,j,k)**2+W(Ibeg,j,k)**2)/(Cmu(Ibeg,j,k)+CmuHt(Ibeg,j,k))
-         Phi = dmin1(Phi,2.0)
+         Phi = nhmin1(Phi,2.0_SP)
          do i =1,Nghost
            U(Ibeg-i,j,k) = -U(Ibeg+i-1,j,k)
            V(Ibeg-i,j,k) = (1.0-Phi)*V(Ibeg+i-1,j,k)
@@ -4587,7 +4601,7 @@
            Cdrag = 1./(1./Kappa*log(30.0*dx/2.0/Zob))**2
          endif
          Phi = dx*Cdrag*sqrt(V(Iend,j,k)**2+W(Iend,j,k)**2)/(Cmu(Iend,j,k)+CmuHt(Iend,j,k))
-         Phi = dmin1(Phi,2.0)
+         Phi = nhmin1(Phi,2.0_SP)
          do i =1,Nghost
            U(Iend+i,j,k) = -U(Iend-i+1,j,k)
            V(Iend+i,j,k) = (1.0-Phi)*V(Iend-i+1,j,k)
@@ -4680,7 +4694,7 @@
            Cdrag = 1./(1./Kappa*log(30.0*dy/2.0/Zob))**2
          endif
          Phi = dy*Cdrag*sqrt(U(i,Jbeg,k)**2+W(i,Jbeg,k)**2)/(Cmu(i,Jbeg,k)+CmuHt(i,Jbeg,k))
-         Phi = dmin1(Phi,2.0)
+         Phi = nhmin1(Phi,2.0_SP)
          do j =1,Nghost
            U(i,Jbeg-j,k) = (1.0-Phi)*U(i,Jbeg+j-1,k)
            V(i,Jbeg-j,k) = -V(i,Jbeg+j-1,k)
@@ -4741,7 +4755,7 @@
            Cdrag = 1./(1./Kappa*log(30.0*dy/2.0/Zob))**2
          endif
          Phi = dy*Cdrag*sqrt(U(i,Jend,k)**2+W(i,Jend,k)**2)/(Cmu(i,Jend,k)+CmuHt(i,Jend,k))
-         Phi = dmin1(Phi,2.0)
+         Phi = nhmin1(Phi,2.0_SP)
          do j =1,Nghost
            U(i,Jend+j,k) = (1.0-Phi)*U(i,Jend-j+1,k)
            V(i,Jend+j,k) = -V(i,Jend-j+1,k)
@@ -4803,16 +4817,16 @@
      do j = Jbeg,Jend
      do i = Ibeg,Iend
        !these are added to calculate the tangential external stress parallel to the surface and bed
-       Atop = dsqrt(1.0+DelxEta(i,j)**2+DelyEta(i,j)**2)
-       Btop = dsqrt(1.0+DelxEta(i,j)**2)
-       Abot = dsqrt(1.0+DelxH(i,j)**2+DelyH(i,j)**2)
-       Bbot = dsqrt(1.0+DelxH(i,j)**2)
+       Atop = nhsqrt(1.0+DelxEta(i,j)**2+DelyEta(i,j)**2)
+       Btop = nhsqrt(1.0+DelxEta(i,j)**2)
+       Abot = nhsqrt(1.0+DelxH(i,j)**2+DelyH(i,j)**2)
+       Bbot = nhsqrt(1.0+DelxH(i,j)**2)
        !velocities parallel to the bed
        DUprime = (DU(i,j,Kbeg)-DelxH(i,j)*DW(i,j,Kbeg))/Bbot 
        DVprime = (-DelxH(i,j)*DelyH(i,j)*DU(i,j,Kbeg)*  &
                   +(1.0+DelxH(i,j)**2)*DV(i,j,Kbeg)  &
                   -DelyH(i,j)*DW(i,j,Kbeg))/Abot/Bbot
-       DUmag = dsqrt(DUprime**2+DVprime**2)
+       DUmag = nhsqrt(DUprime**2+DVprime**2)
        !the distance of the first grid point from the bed
        Dz1 = 0.5*D(i,j)*dsig(Kbeg)/Abot
        !estimate friction velocity
@@ -4826,7 +4840,7 @@
          Cdrag = (Kappa/log(Dz1/Z0))**2
 # endif
        endif
-       Cdrag = dmin1(Cdrag,(Cmu(i,j,Kbeg)+CmuR(i,j,Kbeg)+CmuVt(i,j,Kbeg))/Dz1/(DUmag+Small)*D(i,j))
+       Cdrag = nhmin1(Cdrag,(Cmu(i,j,Kbeg)+CmuR(i,j,Kbeg)+CmuVt(i,j,Kbeg))/Dz1/(DUmag+Small)*D(i,j))
 
        !BSS/rho parallel to the bottom
        TauBot1 = zero
@@ -4875,9 +4889,9 @@
               -DelyH(i,j)*( DelyUzR(i,j,Kbeg)+DelxVzR(i,j,Kbeg)-DelxH(i,j)* DelyWzR(i,j,Kbeg))))
           DUbot_old = 2.0*D(i,j)*UzR(i,j,Kbeg)-DU(i,j,Kbeg+k-1)
           if (DUbot_old>0.)then
-             DU(i,j,Kbeg-k) = dmin1(3.0*DUbot_old,dmax1(-1.0*DUbot_old,DU(i,j,Kbeg-k)))
+             DU(i,j,Kbeg-k) = nhmin1(3.0*DUbot_old,nhmax1(-1.0*DUbot_old,DU(i,j,Kbeg-k)))
           elseif (DUbot_old<0.)then
-             DU(i,j,Kbeg-k) = dmax1(3.0*DUbot_old,dmin1(-1.0*DUbot_old,DU(i,j,Kbeg-k))) 
+             DU(i,j,Kbeg-k) = nhmax1(3.0*DUbot_old,nhmin1(-1.0*DUbot_old,DU(i,j,Kbeg-k))) 
           endif
           if (D(i,j)<MinDepBC) then
              DU(i,j,Kbeg-k) = DU(i,j,Kbeg+k-1)
@@ -4893,9 +4907,9 @@
               -DelxH(i,j)*( DelxVzR(i,j,Kbeg)+DelyUzR(i,j,Kbeg)-DelyH(i,j)*DelxWzR(i,j,Kbeg))))
           DVbot_old = 2.0*D(i,j)*VzR(i,j,Kbeg)-DV(i,j,Kbeg+k-1)
           if (DVbot_old>0.)then
-             DV(i,j,Kbeg-k) = dmin1(3.0*DVbot_old,dmax1(-1.0*DVbot_old,DV(i,j,Kbeg-k)))
+             DV(i,j,Kbeg-k) = nhmin1(3.0*DVbot_old,nhmax1(-1.0*DVbot_old,DV(i,j,Kbeg-k)))
           elseif (DVbot_old<0.)then
-             DV(i,j,Kbeg-k) = dmax1(3.0*DVbot_old,dmin1(-1.0*DVbot_old,DV(i,j,Kbeg-k))) 
+             DV(i,j,Kbeg-k) = nhmax1(3.0*DVbot_old,nhmin1(-1.0*DVbot_old,DV(i,j,Kbeg-k))) 
           endif
           if (D(i,j)<MinDepBC) then
              DV(i,j,Kbeg-k) = DV(i,j,Kbeg+k-1) 
@@ -4915,9 +4929,9 @@
 
           DUtop_old = 2.0*D(i,j)*UzL(i,j,Kend+1)-DU(i,j,Kend-k+1)
           if(DUtop_old>0.)then
-             DU(i,j,Kend+k) = dmin1(3.0*DUtop_old,dmax1(-1.0*DUtop_old,DU(i,j,Kend+k)))
+             DU(i,j,Kend+k) = nhmin1(3.0*DUtop_old,nhmax1(-1.0*DUtop_old,DU(i,j,Kend+k)))
           elseif(DUtop_old<0.)then
-             DU(i,j,Kend+k) = dmax1(3.0*DUtop_old,dmin1(-1.0*DUtop_old,DU(i,j,Kend+k))) 
+             DU(i,j,Kend+k) = nhmax1(3.0*DUtop_old,nhmin1(-1.0*DUtop_old,DU(i,j,Kend+k))) 
           endif
 
           if(D(i,j)<MinDepBC) then
@@ -4936,9 +4950,9 @@
 
           DVtop_old = 2.0*D(i,j)*VzL(i,j,Kend+1)-DV(i,j,Kend-k+1)
           if (DVtop_old>0.)then
-             DV(i,j,Kend+k) = dmin1(3.0*DVtop_old,dmax1(-1.0*DVtop_old,DV(i,j,Kend+k)))
+             DV(i,j,Kend+k) = nhmin1(3.0*DVtop_old,nhmax1(-1.0*DVtop_old,DV(i,j,Kend+k)))
           elseif (DVtop_old<0.)then
-             DV(i,j,Kend+k) = dmax1(3.0*DVtop_old,dmin1(-1.0*DVtop_old,DV(i,j,Kend+k))) 
+             DV(i,j,Kend+k) = nhmax1(3.0*DVtop_old,nhmin1(-1.0*DVtop_old,DV(i,j,Kend+k))) 
           endif
 
           if (D(i,j)<MinDepBC) then
@@ -5389,7 +5403,7 @@
      do i = Ibeg,Iend
        Wds = sqrt(WdU(i,j)**2+WdV(i,j)**2)
        Cds = 1.e-3*(0.61+0.063*Wds)
-       Cds = dmin1(dmax1(Cds,Cdsmin),Cdsmax)
+       Cds = nhmin1(nhmax1(Cds,Cdsmin),Cdsmax)
        
        Wsx(i,j) = 0.001293*Cds*WdU(i,j)*Wds
        Wsy(i,j) = 0.001293*Cds*WdV(i,j)*Wds
@@ -6392,9 +6406,15 @@ endif
        randy = randy/256.0
        old = randy
 
+# if defined (PARALLEL)
        U(i,j,k) = (1.0+0.1*(randy-0.5+0.1*myid))*U(i,j,k)
        V(i,j,k) = (randy-0.5+0.01*myid)*0.01
        W(i,j,k) = (randy-0.5+0.01*myid)*0.01
+# else
+       U(i,j,k) = (1.0+0.1*(randy))*U(i,j,k)
+       V(i,j,k) = (randy)*0.01
+       W(i,j,k) = (randy)*0.01
+# endif
      enddo
      enddo
      enddo
@@ -6616,9 +6636,9 @@ endif
 
          if(Conc(i,j,k)>0.1) then
            if(Nglob==1) then  ! 2D simulation
-             Smax = dmax1(StressMag(i-1,j,k),StressMag(i+1,j,k),StressMag(i,j,k-1),StressMag(i,j,k+1))
+             Smax = nhmax1(StressMag(i-1,j,k),StressMag(i+1,j,k),StressMag(i,j,k-1),StressMag(i,j,k+1))
            else
-             Smax = dmax1(StressMag(i-1,j,k),StressMag(i+1,j,k),StressMag(i,j,k-1),StressMag(i,j,k+1),  &
+             Smax = nhmax1(StressMag(i-1,j,k),StressMag(i+1,j,k),StressMag(i,j,k-1),StressMag(i,j,k+1),  &
                        StressMag(i,j-1,k),StressMag(i,j+1,k))
            endif
 
@@ -8150,7 +8170,7 @@ endif
       if(D(i,j)>Dmin) then
         Sab(i,j,k) = Sij(i,j,k,1)**2+Sij(i,j,k,2)**2+Sij(i,j,k,3)**2  &
                +2.0*(Sij(i,j,k,4)**2+Sij(i,j,k,5)**2+Sij(i,j,k,6)**2)
-        Sab(i,j,k) = dsqrt(2.0*Sab(i,j,k))
+        Sab(i,j,k) = nhsqrt(2.0*Sab(i,j,k))
       endif
     enddo
     enddo
@@ -8600,12 +8620,12 @@ endif
           X0 = 0.05
           Iter = 0
        
-          Xa = dlog(9.0*Umag*Zdis/Cmu(i,j,Kbeg))
- 10       Xn = X0+(0.41-X0*(Xa+dlog(X0)))/(1.0+0.41/X0)
+          Xa = nhlog(9.0*Umag*Zdis/Cmu(i,j,Kbeg))
+ 10       Xn = X0+(0.41-X0*(Xa+nhlog(X0)))/(1.0+0.41/X0)
           if(Iter>=20) then
             write(*,*) 'Iteration exceeds 20 steps',i,j,Umag
           endif
-          if(dabs((Xn-X0)/X0)>1.e-8.and.Xn>0.0) then
+          if(nhabs((Xn-X0)/X0)>1.e-8.and.Xn>0.0) then
             X0 = Xn
             Iter = Iter+1
             goto 10
@@ -9009,7 +9029,7 @@ endif
     do k = Kbeg,Kend
       if(D(i,j)>=Dmin.and.Mask(i,j)==1) then
         DEps(i,j,k) = ALPHA(ISTEP)*DEps0(i,j,k)+BETA(ISTEP)*DEps(i,j,k)
-        DEps(i,j,k) = dmax1(DEps(i,j,k),D(i,j)*Eps_min)
+        DEps(i,j,k) = nhmax1(DEps(i,j,k),D(i,j)*Eps_min)
       endif
     enddo
     enddo
@@ -9063,7 +9083,7 @@ endif
     do k = Kbeg,Kend
       if(D(i,j)>=Dmin.and.Mask(i,j)==1) then
         DTke(i,j,k) = ALPHA(ISTEP)*DTke0(i,j,k)+BETA(ISTEP)*DTke(i,j,k)
-        DTke(i,j,k) = dmax1(DTke(i,j,k),D(i,j)*Tke_min)
+        DTke(i,j,k) = nhmax1(DTke(i,j,k),D(i,j)*Tke_min)
       endif
     enddo
     enddo
@@ -9118,7 +9138,7 @@ endif
       if(D(i,j)>=Dmin.and.Mask(i,j)==1.and.sigc(k)*D(i,j)<=VegH.and. &
          xc(i)>=Veg_X0.and.xc(i)<=Veg_Xn.and.(Yc(j)>=Veg_Y0.and.Yc(j)<=Veg_Yn)) then
         DWke(i,j,k) = ALPHA(ISTEP)*DWke0(i,j,k)+BETA(ISTEP)*DWke(i,j,k)
-        DWke(i,j,k) = dmax1(DWke(i,j,k),0.0)
+        DWke(i,j,k) = nhmax1(DWke(i,j,k),0.0)
       else
         DWke(i,j,k) = 0.0
       endif
@@ -9145,12 +9165,12 @@ endif
         X0 = 0.05
         Iter = 0
 
-        Xa = dlog(9.0*Umag*Zdis/Visc)
- 10     Xn = X0+(0.41-X0*(Xa+dlog(X0)))/(1.0+0.41/X0)
+        Xa = nhlog(9.0*Umag*Zdis/Visc)
+ 10     Xn = X0+(0.41-X0*(Xa+nhlog(X0)))/(1.0+0.41/X0)
         if(Iter>=20) then
           write(*,*) 'Iteration exceeds 20 steps',i,j,Umag
         endif
-        if(dabs((Xn-X0)/X0)>1.e-8.and.Xn>0.0) then
+        if(nhabs((Xn-X0)/X0)>1.e-8.and.Xn>0.0) then
           X0 = Xn
           Iter = Iter+1
           goto 10
@@ -9614,7 +9634,7 @@ endif
     do k = Kbeg,Kend
       if(Prod_s(i,j,k)>Zero) then
         Richf(i,j,k) = -Prod_b(i,j,k)/(Prod_s(i,j,k)+1.0e-16)
-        Richf(i,j,k) = dmax1(0.0,dmin1(0.21,Richf(i,j,k)))
+        Richf(i,j,k) = nhmax1(0.0_SP,nhmin1(0.21_SP,Richf(i,j,k)))
       endif
     enddo
     enddo
@@ -9725,7 +9745,7 @@ endif
     do k = Kbeg,Kend
       if(D(i,j)>=Dmin.and.Mask(i,j)==1) then
         DEps(i,j,k) = ALPHA(ISTEP)*DEps0(i,j,k)+BETA(ISTEP)*DEps(i,j,k)
-        DEps(i,j,k) = dmax1(DEps(i,j,k),D(i,j)*Eps_min)
+        DEps(i,j,k) = nhmax1(DEps(i,j,k),D(i,j)*Eps_min)
       endif
     enddo
     enddo
@@ -9794,7 +9814,7 @@ endif
     do k = Kbeg,Kend
       if(D(i,j)>=Dmin.and.Mask(i,j)==1) then
         DTke(i,j,k) = ALPHA(ISTEP)*DTke0(i,j,k)+BETA(ISTEP)*DTke(i,j,k)
-        DTke(i,j,k) = dmax1(DTke(i,j,k),D(i,j)*Tke_min)
+        DTke(i,j,k) = nhmax1(DTke(i,j,k),D(i,j)*Tke_min)
       endif
     enddo
     enddo
@@ -9819,12 +9839,12 @@ endif
         X0 = 0.05
         Iter = 0
 
-        Xa = dlog(9.0*Umag*Zdis/Visc)
- 10     Xn = X0+(0.41-X0*(Xa+dlog(X0)))/(1.0+0.41/X0)
+        Xa = nhlog(9.0*Umag*Zdis/Visc)
+ 10     Xn = X0+(0.41-X0*(Xa+nhlog(X0)))/(1.0+0.41/X0)
         if(Iter>=20) then
           write(*,*) 'Iteration exceeds 20 steps',i,j,Umag
         endif
-        if(dabs((Xn-X0)/X0)>1.e-8.and.Xn>0.0) then
+        if(nhabs((Xn-X0)/X0)>1.e-8.and.Xn>0.0) then
           X0 = Xn
           Iter = Iter+1
           goto 10
@@ -10334,7 +10354,7 @@ endif
     do k = Kbeg,Kend
       if(Prod_s(i,j,k)>Zero) then
         Richf(i,j,k) = -Prod_b(i,j,k)/(Prod_s(i,j,k)+1.0e-16)
-        Richf(i,j,k) = dmax1(0.0,dmin1(0.21,Richf(i,j,k)))
+        Richf(i,j,k) = nhmax1(0.0_SP,nhmin1(0.21_SP,Richf(i,j,k)))
       endif
     enddo
     enddo
@@ -10406,10 +10426,10 @@ endif
     do i = 1,Mloc
     do j = 1,Nloc
     do k = 1,Kloc1
-      TKezL(i,j,k) = dmax1(TKezL(i,j,k),TKe_min)
-      TKezR(i,j,k) = dmax1(TKezR(i,j,k),TKe_min)
-      EpszL(i,j,k) = dmax1(EpszL(i,j,k),Eps_min)
-      EpszR(i,j,k) = dmax1(EpszR(i,j,k),Eps_min)
+      TKezL(i,j,k) = nhmax1(TKezL(i,j,k),TKe_min)
+      TKezR(i,j,k) = nhmax1(TKezR(i,j,k),TKe_min)
+      EpszL(i,j,k) = nhmax1(EpszL(i,j,k),Eps_min)
+      EpszR(i,j,k) = nhmax1(EpszR(i,j,k),Eps_min)
     enddo
     enddo
     enddo
@@ -10530,9 +10550,9 @@ endif
                       DelxW(i,j,k)+(W(i,j,k+1)-W(i,j,k-1))/(sigc(k+1)-sigc(k-1))*DelxSc(i,j,k))
            S23 = 0.5*((V(i,j,k+1)-V(i,j,k-1))/(sigc(k+1)-sigc(k-1))/D(i,j)+  & 
                       DelyW(i,j,k)+(W(i,j,k+1)-W(i,j,k-1))/(sigc(k+1)-sigc(k-1))*DelySc(i,j,k))
-           lambda = Tke_old(i,j,k)/Eps_old(i,j,k)*dsqrt(2.0*(S11**2+S22**2+S33**2+2.0*(S12**2+S13**2+S23**2)))
+           lambda = Tke_old(i,j,k)/Eps_old(i,j,k)*nhsqrt(2.0*(S11**2+S22**2+S33**2+2.0*(S12**2+S13**2+S23**2)))
            c2e = 1.68 + cmiu*lambda**3*(1.0-lambda/4.38)/(1.0+0.012*lambda**3)
-           c2e = dmax1(0.0,dmin1(c2e,4.0))
+           c2e = nhmax1(0.0_SP,nhmin1(c2e,4.0_SP))
            endif
 
            if(k==Kbeg) then
@@ -10596,7 +10616,7 @@ endif
     do k = Kbeg,Kend
       if(D(i,j)>=Dmin.and.Mask(i,j)==1) then
         DEps(i,j,k) = ALPHA(ISTEP)*DEps0(i,j,k)+BETA(ISTEP)*DEps(i,j,k)
-        DEps(i,j,k) = dmax1(DEps(i,j,k),D(i,j)*Eps_min)
+        DEps(i,j,k) = nhmax1(DEps(i,j,k),D(i,j)*Eps_min)
       endif
     enddo
     enddo
@@ -10767,7 +10787,7 @@ endif
     do k = Kbeg,Kend
       if(D(i,j)>=Dmin.and.Mask(i,j)==1) then
         DTke(i,j,k) = ALPHA(ISTEP)*DTke0(i,j,k)+BETA(ISTEP)*DTke(i,j,k)
-        DTke(i,j,k) = dmax1(DTke(i,j,k),D(i,j)*Tke_min)
+        DTke(i,j,k) = nhmax1(DTke(i,j,k),D(i,j)*Tke_min)
       endif
     enddo
     enddo
@@ -10778,13 +10798,13 @@ endif
     do i = Ibeg,Iend
     do j = Jbeg,Jend
        !these are added to calculate the tangential external stress parallel to the surface and bed
-       Abot = dsqrt(1.0+DelxH(i,j)**2+DelyH(i,j)**2)
-       Bbot = dsqrt(1.0+DelxH(i,j)**2)
+       Abot = nhsqrt(1.0+DelxH(i,j)**2+DelyH(i,j)**2)
+       Bbot = nhsqrt(1.0+DelxH(i,j)**2)
        !velocities parallel to the bed
        DUprime = (DU(i,j,Kbeg)-DelxH(i,j)*DW(i,j,Kbeg))/Bbot 
        DVprime = (-DelxH(i,j)*DelyH(i,j)*DU(i,j,Kbeg)+(1.0+DelxH(i,j)**2)*  &
                  DV(i,j,Kbeg)-DelyH(i,j)*DW(i,j,Kbeg))/Abot/Bbot
-       DUmag = dsqrt(DUprime**2+DVprime**2)
+       DUmag = nhsqrt(DUprime**2+DVprime**2)
 
       if(D(i,j)<Dmin.or.Mask(i,j)==0) cycle
       
@@ -10821,11 +10841,11 @@ endif
          Cdrag = (Kappa/log(Dz1/Z0))**2
 # endif
        endif
-       Cdrag = dmin1(Cdrag,(Cmu(i,j,Kbeg)+CmuR(i,j,Kbeg)+CmuVt(i,j,Kbeg))/Dz1/(DUmag+Small)*D(i,j))
-       Ustar = dsqrt(Cdrag)*DUmag/D(i,j)
+       Cdrag = nhmin1(Cdrag,(Cmu(i,j,Kbeg)+CmuR(i,j,Kbeg)+CmuVt(i,j,Kbeg))/Dz1/(DUmag+Small)*D(i,j))
+       Ustar = nhsqrt(Cdrag)*DUmag/D(i,j)
 
-       Tkeb = dmax1(Ustar**2/sqrt(cmiu),Tke_min)
-       Epsb = dmax1(Ustar**3/(Kappa*Dz1),Eps_min)
+       Tkeb = nhmax1(Ustar**2/sqrt(cmiu),Tke_min)
+       Epsb = nhmax1(Ustar**3/(Kappa*Dz1),Eps_min)
        DTke(i,j,Kbeg) = D(i,j)*Tkeb
        DEps(i,j,Kbeg) = D(i,j)*Epsb
       endif
@@ -10843,8 +10863,8 @@ endif
     do j = Jbeg,Jend
     if (Mask(i,j)==0.or.D(i,j)<Dmin) cycle
       do k = 1,Nghost
-           Atop = dsqrt(1.0+DelxEta(i,j)**2+DelyEta(i,j)**2)
-           Btop = dsqrt(1.0+DelxEta(i,j)**2)
+           Atop = nhsqrt(1.0+DelxEta(i,j)**2+DelyEta(i,j)**2)
+           Btop = nhsqrt(1.0+DelxEta(i,j)**2)
             !DTke(i,j,Kend+k) = DTke(i,j,Kend-k+1)
             DTke(i,j,Kend+k) = DTke(i,j,Kend-k+1) &
            +(sigc(Kend+k)-sigc(Kend-k+1))*D(i,j)**2/Atop**2 * &
@@ -11343,12 +11363,12 @@ endif
       X0 = 0.05
       Iter = 0
 
-      Xa = dlog(9.0*Umag*Zdis/Visc)
- 10      Xn = X0+(0.41-X0*(Xa+dlog(X0)))/(1.0+0.41/X0)
+      Xa = nhlog(9.0*Umag*Zdis/Visc)
+ 10      Xn = X0+(0.41-X0*(Xa+nhlog(X0)))/(1.0+0.41/X0)
       if(Iter>=20) then
         write(*,*) 'Iteration exceeds 20 steps',i,j,Umag
       endif
-      if(dabs((Xn-X0)/X0)>1.e-8.and.Xn>0.0) then
+      if(nhabs((Xn-X0)/X0)>1.e-8.and.Xn>0.0) then
         X0 = Xn
         Iter = Iter+1
         goto 10
@@ -12069,7 +12089,7 @@ endif
       do i = Ibeg,Iend
         DConc(i,j,k) = ALPHA(ISTEP)*DConc0(i,j,k)+BETA(ISTEP)*DConc(i,j,k)
         if(Mask(i,j)==0) DConc(i,j,k) = Zero
-        DConc(i,j,k) = dmax1(DConc(i,j,k),Zero)
+        DConc(i,j,k) = nhmax1(DConc(i,j,k),Zero)
       enddo
       enddo
       enddo
@@ -12081,7 +12101,7 @@ endif
         DConc(i,j,k) = ALPHA(ISTEP)*DConc0(i,j,k)+  &
                   BETA(ISTEP)*(DConc(i,j,k)+dt*R5(i,j,k)) 
         if(Mask(i,j)==0) DConc(i,j,k) = Zero
-        DConc(i,j,k) = dmax1(DConc(i,j,k),Zero)
+        DConc(i,j,k) = nhmax1(DConc(i,j,k),Zero)
       enddo
       enddo
       enddo
@@ -12323,7 +12343,7 @@ endif
       Shields = Taub1/(sr-1.0)/Grav/SD50
 
       ! upper-bound shields number for the start of sheet flow
-      Shields = dmin1(Shields,1.0) 
+      Shields = nhmin1(Shields,1.0) 
 
       ! Pickup rate
       if(Shields>Shields_c) then
@@ -13120,7 +13140,7 @@ endif
             pb(ic,jc,k) = 0.0
           else
             if(phy_z(k)>=-Hc(i2,j2)) then
-              dz = dmin1(phy_z(k+1)-phy_z(k),Eta(i2,j2)-phy_z(k))
+              dz = nhmin1(phy_z(k+1)-phy_z(k),Eta(i2,j2)-phy_z(k))
               pb(ic,jc,k) = pb(ic,jc,k+1)+0.5*(Rhoz(ic,jc,k)+Rhoz(ic,jc,k+1))*dz
             elseif(phy_z(k)<-Hc(i2,j2).and.phy_z(k+1)>-Hc(i2,j2)) then
               dz = -Hc(i2,j2)-Phy_z(k)
@@ -13532,7 +13552,7 @@ SUBROUTINE hot_start
 ! uvw
 
 
-     call vel_bc(1)
+     call vel_bc
 # if defined (PARALLEL)
      call phi_3D_exch(U)
      call phi_3D_exch(V)

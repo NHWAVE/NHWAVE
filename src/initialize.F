@@ -752,7 +752,7 @@
          k_i = 0.0
          do nw = 1 , nwave
             segmasqr = ( 2.0d0 * pi / period_i (nw) ) ** 2
-            ctmp = dsqrt ( Grav * depth_comp)
+            ctmp = nhsqrt ( Grav * depth_comp)
             xltmp = ctmp * period_i ( nw )
             xxk = 2.0d0 * pi / xltmp
             n = 0

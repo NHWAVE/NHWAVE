@@ -1,5 +1,30 @@
 ! added by Cheng for deformable slide
 # if defined (DEFORMABLESLIDE)
+
+!----------------------------------------------------------------------------------------
+!
+!    (1) Function indx_for_ij
+!
+!    The subroutines in this file routinely map Fortran arrays to flattened single-index
+!    vectors for the sake of computation.  As originally written each subroutine would
+!    construct an index-mapping array, indx(:,:), which provided the flattened index
+!    for the doublet (i, j).  The memory allocation and round-trips in and out of
+!    cache and system RAM very likely outweigh the code necessary to programmatically
+!    calculate the flattened index on-the-fly.  In some cases, the calculation simplifies
+!    to a simple increment of the flattened index.  In short, the indx(:,:) arrays
+!    really are not necessary.
+!
+!    This function calculates the flattened index for an arbitrary doublet (i, j).
+!
+    function indx_for_ij(i, j, iLow, iHigh, jLow, jHigh)
+      implicit none
+      integer :: indx_for_ij
+      integer, intent(in) :: i, j, iLow, iHigh, jLow, jHigh
+       
+      indx_for_ij = 1 + (i - iLow) + (iHigh - iLow + 1) * (j - jLow)
+    end function indx_for_ij
+
+
     subroutine update_maskgs
 !------------------------------------------------------  
 !    This subroutine is used to update maskgs for wetting-drying
@@ -2252,7 +2277,7 @@
      implicit none
      integer :: i,j,neq,n,ic
      real(SP), dimension(:,:), allocatable :: DelxQtgs,DelyQtgs
-     integer,  dimension(:,:), allocatable :: indx
+!     integer,  dimension(:,:), allocatable :: indx
 	 REAL(SP) :: DgsC,DelxH0C,DelyH0C,QtgsC,NHC,&
 	             DelxQtgsR,QtgsR,DelxHgsR,DelxDgsR,DgsR,NHR, &
 	             DelxQtgsL,QtgsL,DelxHgsL,DelxDgsL,DgsL,NHL, &
@@ -2262,7 +2287,7 @@
 
      allocate(DelxQtgs(Mloc,Nloc))
      allocate(DelyQtgs(Mloc,Nloc))
-	 allocate(indx(MlocC,NlocC))
+!	 allocate(indx(MlocC,NlocC))
 	 
 	 DelxQtgs=Zero;DelyQtgs=Zero
 	 call DelxH_gs
@@ -2274,16 +2299,17 @@
 	 call delyFun_nl_gs_2D(Hgs,DelyHgs)
 	 
      ! generate coefficient matrix
-     neq = 0; indx=0
-     do j = Jbeg,JendC
-     do i = Ibeg,IendC
-       neq = neq+1
-       indx(i,j) = neq
-     enddo
-     enddo 
+!     neq = 0; indx=0
+!     do j = Jbeg,JendC
+!     do i = Ibeg,IendC
+!       neq = neq+1
+!       indx(i,j) = neq
+!     enddo
+!     enddo 
 
      ! generate source term 
      Rhsgs = Zero; WgsC = Zero
+     neq = 0
      do j = Jbeg,JendC
      do i = Ibeg,IendC
        DgsC=0.25*(Dgs(i,j)+Dgs(i-1,j)+Dgs(i,j-1)+Dgs(i-1,j-1))
@@ -2321,7 +2347,9 @@
        QtgsC=0.25*(Qtgs(i,j)+Qtgs(i-1,j)+Qtgs(i,j-1)+Qtgs(i-1,j-1))
        NHC=-(2.0*dt/DgsC)*QtgsC
 	   WgsC(i,j)=0.25*(Wgs(i,j)+Wgs(i-1,j)+Wgs(i,j-1)+Wgs(i-1,j-1))
-       Rhsgs(indx(i,j))=(-0.5*(1./dx+DelxH0C/DgsC)*(Rhogs(i,j)*(Ugs(i,j)  +Ugs(i,j-1)  )+2.*NHR) &
+	   
+	   neq = neq + 1
+       Rhsgs(neq)=(-0.5*(1./dx+DelxH0C/DgsC)*(Rhogs(i,j)*(Ugs(i,j)  +Ugs(i,j-1)  )+2.*NHR) &
                          +0.5*(1./dx-DelxH0C/DgsC)*(Rhogs(i,j)*(Ugs(i-1,j)+Ugs(i-1,j-1))+2.*NHL) &
                          -0.5*(1./dy+DelyH0C/DgsC)*(Rhogs(i,j)*(Vgs(i,j)  +Vgs(i-1,j)  )+2.*NHB) &
                          +0.5*(1./dy-DelyH0C/DgsC)*(Rhogs(i,j)*(Vgs(i,j-1)+Vgs(i-1,j-1))+2.*NHF) &
@@ -2331,6 +2359,7 @@
 
 	 ! generate coefficient matrix
      Coefgs = Zero
+     neq = 0
      do j = Jbeg,JendC
      do i = Ibeg,IendC
        DgsC=0.25*(Dgs(i,j)+Dgs(i-1,j)+Dgs(i,j-1)+Dgs(i-1,j-1))
@@ -2362,11 +2391,13 @@
           +dt*(1./dy+DelyH0C/DgsC)*(2./(3.*dy)-(1./3.)*(DelyDgsB/DgsB)+0.5*(DelyH0B/DgsB)) &
           +dt*(1./dy-DelyH0C/DgsC)*(2./(3.*dy)+(1./3.)*(DelyDgsF/DgsF)-0.5*(DelyH0F/DgsF)) &
           +2.*dt/DgsC**2)*DgsC
-       Coefgs(indx(i,j),1) = QC    ! (i,j)
-       Coefgs(indx(i,j),2) = QL    ! (i-1,j)
-       Coefgs(indx(i,j),3) = QR    ! (i+1,j)
-       Coefgs(indx(i,j),4) = QF    ! (i,j-1)
-       Coefgs(indx(i,j),5) = QB    ! (i,j+1)
+        
+       neq = neq + 1
+       Coefgs(neq,1) = QC    ! (i,j)
+       Coefgs(neq,2) = QL    ! (i-1,j)
+       Coefgs(neq,3) = QR    ! (i+1,j)
+       Coefgs(neq,4) = QF    ! (i,j-1)
+       Coefgs(neq,5) = QB    ! (i,j+1)
      enddo
      enddo
 
@@ -2404,9 +2435,10 @@
 # if defined (PARALLEL)
      if(n_west.eq.MPI_PROC_NULL) then
 # endif
-     i = Ibeg
+!     i = Ibeg
      do j = Jbeg,JendC
-       ic = indx(i,j)
+!       ic = indx(i,j)
+       ic = indx_for_ij(Ibeg, j, Ibeg, IendC, Jbeg, JendC)
        Coefgs(ic,1) = Coefgs(ic,1)+Coefgs(ic,2)
        Coefgs(ic,2) = Zero
      enddo
@@ -2418,9 +2450,10 @@
 # if defined (PARALLEL)
      if(n_east.eq.MPI_PROC_NULL) then
 # endif
-     i = IendC
+!     i = IendC
      do j = Jbeg,JendC
-       ic = indx(i,j)
+!       ic = indx(i,j)
+       ic = indx_for_ij(Iendc, j, Ibeg, IendC, Jbeg, JendC)
        Coefgs(ic,1) = Coefgs(ic,1)+Coefgs(ic,3)
        Coefgs(ic,3) = Zero
      enddo
@@ -2432,9 +2465,10 @@
 # if defined (PARALLEL)
      if(n_suth.eq.MPI_PROC_NULL) then
 # endif
-     j = Jbeg
+!     j = Jbeg
      do i = Ibeg,IendC
-       ic = indx(i,j)         
+!       ic = indx(i,j)    
+       ic = indx_for_ij(i, Jbeg, Ibeg, IendC, Jbeg, JendC)     
        Coefgs(ic,1) = Coefgs(ic,1)+Coefgs(ic,4)
        Coefgs(ic,4) = Zero
      enddo
@@ -2446,9 +2480,10 @@
 # if defined (PARALLEL)
      if(n_nrth.eq.MPI_PROC_NULL) then
 # endif
-     j = JendC
+!     j = JendC
      do i = Ibeg,IendC
-       ic = indx(i,j)
+!       ic = indx(i,j)
+       ic = indx_for_ij(i, Jendc, Ibeg, IendC, Jbeg, JendC)  
        Coefgs(ic,1) = Coefgs(ic,1)+Coefgs(ic,5)
        Coefgs(ic,5) = Zero
      enddo
@@ -2460,9 +2495,10 @@
 # if defined (PARALLEL)
      if((n_west.eq.MPI_PROC_NULL).and.(n_suth.eq.MPI_PROC_NULL)) then
 # endif
-     i = Ibeg
-     j = Jbeg
-     ic = indx(i,j)
+!     i = Ibeg
+!     j = Jbeg
+!     ic = indx(i,j)
+     ic = indx_for_ij(Ibeg, Jbeg, Ibeg, IendC, Jbeg, JendC)  
      Coefgs(ic,1) = Coefgs(ic,1)+Coefgs(ic,2)+Coefgs(ic,4)
      Coefgs(ic,2) = Zero
 	 Coefgs(ic,4) = Zero
@@ -2474,9 +2510,10 @@
 # if defined (PARALLEL)
      if((n_east.eq.MPI_PROC_NULL).and.(n_suth.eq.MPI_PROC_NULL)) then
 # endif
-     i = IendC
-     j = Jbeg
-     ic = indx(i,j)
+!     i = IendC
+!     j = Jbeg
+!     ic = indx(i,j)
+     ic = indx_for_ij(IendC, Jbeg, Ibeg, IendC, Jbeg, JendC)  
      Coefgs(ic,1) = Coefgs(ic,1)+Coefgs(ic,3)+Coefgs(ic,4)
      Coefgs(ic,3) = Zero
 	 Coefgs(ic,4) = Zero
@@ -2488,9 +2525,10 @@
 # if defined (PARALLEL)
      if((n_west.eq.MPI_PROC_NULL).and.(n_nrth.eq.MPI_PROC_NULL)) then
 # endif
-     i = Ibeg
-     j = JendC
-     ic = indx(i,j)         
+!     i = Ibeg
+!     j = JendC
+!     ic = indx(i,j)   
+     ic = indx_for_ij(Ibeg, JendC, Ibeg, IendC, Jbeg, JendC)        
      Coefgs(ic,1) = Coefgs(ic,1)+Coefgs(ic,2)+Coefgs(ic,5)
      Coefgs(ic,2) = Zero
 	 Coefgs(ic,5) = Zero
@@ -2502,9 +2540,10 @@
 # if defined (PARALLEL)
      if((n_east.eq.MPI_PROC_NULL).and.(n_nrth.eq.MPI_PROC_NULL)) then
 # endif
-     i = IendC
-     j = JendC
-     ic = indx(i,j)
+!     i = IendC
+!     j = JendC
+!     ic = indx(i,j)
+     ic = indx_for_ij(IendC, JendC, Ibeg, IendC, Jbeg, JendC)  
      Coefgs(ic,1) = Coefgs(ic,1)+Coefgs(ic,3)+Coefgs(ic,5)
      Coefgs(ic,3) = Zero
      Coefgs(ic,5) = Zero
@@ -2513,15 +2552,20 @@
 # endif
 
      ! take (i=2,j=2) to obtain the diagonal information (Serial Computing used)
-     JCoefgs(1) = indx(Ibeg+1,Jbeg+1)-indx(Ibeg+1,Jbeg+1)  ! (i,j)
-     JCoefgs(2) = indx(Ibeg  ,Jbeg+1)-indx(Ibeg+1,Jbeg+1)  ! (i-1,j)
-     JCoefgs(3) = indx(Ibeg+2,Jbeg+1)-indx(Ibeg+1,Jbeg+1)  ! (i+1,j) 
-	 JCoefgs(4) = indx(Ibeg+1,Jbeg  )-indx(Ibeg+1,Jbeg+1)  ! (i,j-1)
-     JCoefgs(5) = indx(Ibeg+1,Jbeg+2)-indx(Ibeg+1,Jbeg+1)  ! (i,j+1)
+     JCoefgs(1) = indx_for_ij(Ibeg+1, Jbeg+1, Ibeg, IendC, Jbeg, JendC) - &
+                  indx_for_ij(Ibeg+1, Jbeg+1, Ibeg, IendC, Jbeg, JendC)  ! (i,j)
+     JCoefgs(2) = indx_for_ij(Ibeg  , Jbeg+1, Ibeg, IendC, Jbeg, JendC) - &
+                  indx_for_ij(Ibeg+1, Jbeg+1, Ibeg, IendC, Jbeg, JendC)  ! (i-1,j)
+     JCoefgs(3) = indx_for_ij(Ibeg+2, Jbeg+1, Ibeg, IendC, Jbeg, JendC) - &
+                  indx_for_ij(Ibeg+1, Jbeg+1, Ibeg, IendC, Jbeg, JendC)  ! (i+1,j) 
+	 JCoefgs(4) = indx_for_ij(Ibeg+1, Jbeg  , Ibeg, IendC, Jbeg, JendC) - &
+	              indx_for_ij(Ibeg+1, Jbeg+1, Ibeg, IendC, Jbeg, JendC)  ! (i,j-1)
+     JCoefgs(5) = indx_for_ij(Ibeg+1, Jbeg+2, Ibeg, IendC, Jbeg, JendC) - &
+                  indx_for_ij(Ibeg+1, Jbeg+1, Ibeg, IendC, Jbeg, JendC)  ! (i,j+1)
 
      deallocate(DelxQtgs)
      deallocate(DelyQtgs)
-	 deallocate(indx)
+!	 deallocate(indx)
 
      return
      end subroutine generate_Coef_rhs_gs
@@ -2546,7 +2590,7 @@
      integer :: ilower(ndim),iupper(ndim),offsets(nentries,ndim),stencil_indices(nentries)
      real(SP) :: final_res_norm
      real(SP), dimension(:), allocatable :: values,Phi
-     integer, dimension(:,:), allocatable :: indx 
+!     integer, dimension(:,:), allocatable :: indx 
      data ((offsets(i,j),j=1,ndim),i=1,nentries)/0,0,-1,0,1,0,0,-1,0,1/
 
      ! set up a two dimensional grid
@@ -2586,25 +2630,28 @@
        stencil_indices(i) = i-1
      enddo
 
-     allocate(indx(MlocC,NlocC))
+!     allocate(indx(MlocC,NlocC))
  
-     neq = 0
-     do j = Jbeg,JendC
-     do i = Ibeg,IendC
-       neq = neq+1
-       indx(i,j) = neq
-     enddo
-     enddo
+!     neq = 0
+!     do j = Jbeg,JendC
+!     do i = Ibeg,IendC
+!       neq = neq+1
+!       indx(i,j) = neq
+!     enddo
+!     enddo
     
      nvalues = (IendC-Ibeg+1)*(JendC-Jbeg+1)*nentries !(grid points)*(stencil points)
      allocate(values(nvalues))
 
      ivalues = 0
+     neq = 0
      do j = Jbeg,JendC
      do i = Ibeg,IendC
+       neq = neq + 1
        do n = 1,nentries
          ivalues = ivalues+1
-         values(ivalues) = Coefgs(indx(i,j),n)
+!         values(ivalues) = Coefgs(indx(i,j),n)
+         values(ivalues) = Coefgs(neq,n)
        enddo
      enddo
      enddo
@@ -2628,9 +2675,12 @@
 
      ! initial guess
      allocate(Phi(neqnsgs))
+     neq = 0
      do j = Jbeg,JendC
      do i = Ibeg,IendC
-       Phi(indx(i,j)) = QbgsC(i,j)
+       neq = neq + 1
+!       Phi(indx(i,j)) = QbgsC(i,j)
+       Phi(neq) = QbgsC(i,j)
      enddo
      enddo
      
@@ -2668,9 +2718,12 @@
      ! get results
      call HYPRE_StructVectorGetBoxValues(vec_x,ilower,iupper,Phi,ierr)
 
+     neq = 0
      do j = Jbeg,JendC
      do i = Ibeg,IendC
-       QbgsC(i,j) = Phi(indx(i,j))
+       neq = neq + 1
+!       QbgsC(i,j) = Phi(indx(i,j))
+       QbgsC(i,j) = Phi(neq)
      enddo
      enddo
 
@@ -2692,7 +2745,7 @@
      call HYPRE_StructGMRESDestroy(solver,ierr)
      call HYPRE_StructSMGDestroy(precond,ierr)
 
-     deallocate(indx)
+!     deallocate(indx)
      deallocate(values)
      deallocate(Phi)
 
