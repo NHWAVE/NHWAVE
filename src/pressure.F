@@ -40,17 +40,43 @@
 !   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 !----------------------------------------------------------------------------------------------
 !
-!    Subroutines included in this file:
+!    Subroutines/functions included in this file:
 !-----------------------------------------------------------------------------------------
 !
-!    (1) poisson_solver
-!    (2) hypre_pres_solver
-!    (3) generate_coef_rhs
+!    (1) indx_for_ijk
+!    (2) poisson_solver
+!    (3) hypre_pres_solver
+!    (4) generate_coef_rhs
 !
 !----------------------------------------------------------------------------------------
+
 !----------------------------------------------------------------------------------------
 !
-!    (1) Subroutine poisson_solver
+!    (1) Function indx_for_ijk
+!
+!    The subroutines in this file routinely map Fortran arrays to flattened single-index
+!    vectors for the sake of computation.  As originally written each subroutine would
+!    construct an index-mapping array, indx(:,:,:), which provided the flattened index
+!    for the triplet (i, j, k).  The memory allocation and round-trips in and out of
+!    cache and system RAM very likely outweigh the code necessary to programmatically
+!    calculate the flattened index on-the-fly.  In some cases, the calculation simplifies
+!    to a simple increment of the flattened index.  In short, the indx(:,:,:) arrays
+!    really are not necessary.
+!
+!    This function calculates the flattened index for an arbitrary triplet (i, j, k).
+!
+     function indx_for_ijk(i, j, k, iLow, iHigh, jLow, jHigh, kLow, kHigh)
+       implicit none
+       integer :: indx_for_ijk
+       integer, intent(in) :: i, j, k, iLow, iHigh, jLow, jHigh, kLow, kHigh
+       
+       indx_for_ijk = 1 + (i - iLow) + (iHigh - iLow + 1) * ((j - jLow) + (k - kLow) * (jHigh - jLow + 1))
+     end function indx_for_ijk
+
+
+!----------------------------------------------------------------------------------------
+!
+!    (2) Subroutine poisson_solver
 !
 !    Solve poisson equation for dynamic pressure
 !
@@ -247,7 +273,7 @@
 !
 !-----------------------------------------------------------------------------------------------
 !
-!    (2) Subroutine hypre_pres_solver
+!    (3) Subroutine hypre_pres_solver
 !
 !    solve for dynamic pressure using HYPRE package
 !
@@ -272,7 +298,7 @@
                 periodic_shift(ndim)
      real(SP) :: final_res_norm
      real(SP), dimension(:), allocatable :: values,Phi
-     integer, dimension(:,:,:), allocatable :: indx 
+!     integer, dimension(:,:,:), allocatable :: indx 
      data ((offsets(i,j),j=1,ndim),i=1,nentries)/0,0,0,1,0,0,0,1,0,0,-1,1,-1,0,1,  &
              0,0,1,1,0,1,0,1,1,-1,0,0,0,-1,0,  &
              0,1,-1,1,0,-1,0,0,-1,-1,0,-1,0,-1,-1/
@@ -338,28 +364,36 @@
        stencil_indices(i) = i-1
      enddo
 
-     allocate(indx(Mloc,Nloc,Kloc))
- 
-     neq = 0
-     do k = Kbeg,Kend
-     do j = Jbeg,Jend
-     do i = Ibeg,Iend
-       neq = neq+1
-       indx(i,j,k) = neq
-     enddo
-     enddo
-     enddo
+! The indx array is completely unnecessary; every use of indx() indices uses the same
+! 3-tier looping construct over k, j, i.  There is a 1-to-1 mapping of each indexing triplet
+! to a single integer index.  So there's no reason to allocate memory and precompute the
+! indices, each loop can just run the neq incremental counter itself.
+!
+!     allocate(indx(Mloc,Nloc,Kloc))
+! 
+!     neq = 0
+!     do k = Kbeg,Kend
+!     do j = Jbeg,Jend
+!     do i = Ibeg,Iend
+!       neq = neq+1
+!       indx(i,j,k) = neq
+!     enddo
+!     enddo
+!     enddo
     
      nvalues = (Iend-Ibeg+1)*(Jend-Jbeg+1)*(Kend-Kbeg+1)*nentries
      allocate(values(nvalues))
 
      ivalues = 0
+     neq = 0
      do k = Kbeg,Kend
      do j = Jbeg,Jend
      do i = Ibeg,Iend
+       neq = neq + 1
        do n = 1,nentries
          ivalues = ivalues+1
-         values(ivalues) = Coef(indx(i,j,k),n)
+!         values(ivalues) = Coef(indx(i,j,k),n)
+         values(ivalues) = Coef(neq, n)
        enddo
      enddo
      enddo
@@ -385,10 +419,13 @@
 
 ! initial guess
      allocate(Phi(neqns))
+     neq = 0
      do k = Kbeg,Kend
      do j = Jbeg,Jend
      do i = Ibeg,Iend
-       Phi(indx(i,j,k)) = P(i,j,k)
+       neq = neq + 1
+!       Phi(indx(i,j,k)) = P(i,j,k)
+       Phi(neq) = P(i, j, k)
      enddo
      enddo
      enddo
@@ -427,10 +464,13 @@
 ! get results
      call NHWAVE_HYPRE_StructVectorGetBoxValues(vec_x,ilower,iupper,neqns,Phi,ierr)
 
+     neq = 0
      do k = Kbeg,Kend
      do j = Jbeg,Jend
      do i = Ibeg,Iend
-       P(i,j,k) = Phi(indx(i,j,k))
+       neq = neq + 1
+!       P(i,j,k) = Phi(indx(i,j,k))
+       P(i, j, k) = Phi(neq)
      enddo
      enddo
      enddo
@@ -453,7 +493,7 @@
      call HYPRE_StructGMRESDestroy(solver,ierr)
      call HYPRE_StructSMGDestroy(precond,ierr)
 
-     deallocate(indx)
+!     deallocate(indx)
      deallocate(values)
      deallocate(Phi)
 
@@ -462,6 +502,8 @@
      end subroutine hypre_pres_solver
 !
 !------------------------------------------------------------------------------------------------------
+!    (4) generate_coef_rhs
+!
 !    Generate coefficient matrix and rhs
 !    Called by 
 !       poisson_solver
@@ -476,15 +518,22 @@
 !
      use global
      implicit none
+     integer :: indx_for_ijk
      integer :: i,j,k,neq,n,ic
      real(SP), dimension(:,:,:), allocatable :: DelxS,DelyS,DelzS,A1
-     integer,  dimension(:,:,:), allocatable :: indx
+!     integer,  dimension(:,:,:), allocatable :: indx
 
      allocate(DelxS(Mloc,Nloc,Kloc1))
      allocate(DelyS(Mloc,Nloc,Kloc1))
      allocate(DelzS(Mloc,Nloc,Kloc1))
      allocate(A1(Mloc,Nloc,Kloc1))
-     allocate(indx(Mloc,Nloc,Kloc))
+
+! The indx array is completely unnecessary; every use of indx() indices uses the same
+! 3-tier looping construct over k, j, i.  There is a 1-to-1 mapping of each indexing triplet
+! to a single integer index.  So there's no reason to allocate memory and precompute the
+! indices, each loop can just run the neq incremental counter itself.
+!
+!     allocate(indx(Mloc,Nloc,Kloc))
 
      DelxS = Zero
      DelyS = Zero
@@ -504,28 +553,37 @@
      enddo
    
      ! generate coefficient matrix
+!     neq = 0
+!     do k = Kbeg,Kend
+!     do j = Jbeg,Jend
+!     do i = Ibeg,Iend
+!       neq = neq+1
+!       indx(i,j,k) = neq
+!     enddo
+!     enddo 
+!     enddo
+
+     ! generate source term 
+     Rhs = Zero
      neq = 0
      do k = Kbeg,Kend
      do j = Jbeg,Jend
      do i = Ibeg,Iend
-       neq = neq+1
-       indx(i,j,k) = neq
-     enddo
-     enddo 
-     enddo
-
-     ! generate source term 
-     Rhs = Zero
-     do k = Kbeg,Kend
-     do j = Jbeg,Jend
-     do i = Ibeg,Iend
+       neq = neq + 1
 # if defined (POROUSMEDIA)
-       Rhs(indx(i,j,k)) = -((Uf(i+1,j,k)-Uf(i-1,j,k))/(2.0*dx)+(U(i,j,k)-U(i,j,k-1))/(0.5*(dsig(k)+dsig(k-1)))*  &
+!       Rhs(indx(i,j,k)) = -((Uf(i+1,j,k)-Uf(i-1,j,k))/(2.0*dx)+(U(i,j,k)-U(i,j,k-1))/(0.5*(dsig(k)+dsig(k-1)))*  &
+!              DelxS(i,j,k)+(Vf(i,j+1,k)-Vf(i,j-1,k))/(2.0*dy)+(V(i,j,k)-V(i,j,k-1))/(0.5*(dsig(k)+dsig(k-1)))*  &
+!              DelyS(i,j,k)+(W(i,j,k)-W(i,j,k-1))/(0.5*(dsig(k)+dsig(k-1)))*DelzS(i,j,k)-SourceC(i,j))*Rho0/dt* &
+!              (1+Cp_Por(i,j,k))
+       Rhs(neq) = -((Uf(i+1,j,k)-Uf(i-1,j,k))/(2.0*dx)+(U(i,j,k)-U(i,j,k-1))/(0.5*(dsig(k)+dsig(k-1)))*  &
               DelxS(i,j,k)+(Vf(i,j+1,k)-Vf(i,j-1,k))/(2.0*dy)+(V(i,j,k)-V(i,j,k-1))/(0.5*(dsig(k)+dsig(k-1)))*  &
               DelyS(i,j,k)+(W(i,j,k)-W(i,j,k-1))/(0.5*(dsig(k)+dsig(k-1)))*DelzS(i,j,k)-SourceC(i,j))*Rho0/dt* &
               (1+Cp_Por(i,j,k))
 # else
-       Rhs(indx(i,j,k)) = -((Uf(i+1,j,k)-Uf(i-1,j,k))/(2.0*dx)+(U(i,j,k)-U(i,j,k-1))/(0.5*(dsig(k)+dsig(k-1)))*  &
+!       Rhs(indx(i,j,k)) = -((Uf(i+1,j,k)-Uf(i-1,j,k))/(2.0*dx)+(U(i,j,k)-U(i,j,k-1))/(0.5*(dsig(k)+dsig(k-1)))*  &
+!              DelxS(i,j,k)+(Vf(i,j+1,k)-Vf(i,j-1,k))/(2.0*dy)+(V(i,j,k)-V(i,j,k-1))/(0.5*(dsig(k)+dsig(k-1)))*  &
+!              DelyS(i,j,k)+(W(i,j,k)-W(i,j,k-1))/(0.5*(dsig(k)+dsig(k-1)))*DelzS(i,j,k)-SourceC(i,j))*Rho0/dt
+       Rhs(neq) = -((Uf(i+1,j,k)-Uf(i-1,j,k))/(2.0*dx)+(U(i,j,k)-U(i,j,k-1))/(0.5*(dsig(k)+dsig(k-1)))*  &
               DelxS(i,j,k)+(Vf(i,j+1,k)-Vf(i,j-1,k))/(2.0*dy)+(V(i,j,k)-V(i,j,k-1))/(0.5*(dsig(k)+dsig(k-1)))*  &
               DelyS(i,j,k)+(W(i,j,k)-W(i,j,k-1))/(0.5*(dsig(k)+dsig(k-1)))*DelzS(i,j,k)-SourceC(i,j))*Rho0/dt
 # endif
@@ -534,25 +592,43 @@
      enddo
 
      Coef = Zero
+     neq = 0
      do k = Kbeg,Kend
      do j = Jbeg,Jend
      do i = Ibeg,Iend
-       Coef(indx(i,j,k),1) = (2./(dx*dx)+2./(dy*dy)+A1(i,j,k)/(0.5*(dsig(k)+dsig(k-1))*dsig(k))+  &
+       neq = neq + 1
+!      Coef(indx(i,j,k),1) = (2./(dx*dx)+2./(dy*dy)+A1(i,j,k)/(0.5*(dsig(k)+dsig(k-1))*dsig(k))+  &
+!               A1(i,j,k)/(0.5*(dsig(k)+dsig(k-1))*dsig(k-1)))
+!      Coef(indx(i,j,k),2) = -1./(dx*dx)
+!      Coef(indx(i,j,k),3) = -1./(dy*dy)
+!      Coef(indx(i,j,k),4) = (DelyS(i,j-1,k)/(2.*dy*(dsig(k)+dsig(k-1)))+DelyS(i,j,k)/(2.*dy*(dsig(k)+dsig(k-1))))   
+!      Coef(indx(i,j,k),5) = (DelxS(i-1,j,k)/(2.*dx*(dsig(k)+dsig(k-1)))+DelxS(i,j,k)/(2.*dx*(dsig(k)+dsig(k-1))))
+!      Coef(indx(i,j,k),6) = -A1(i,j,k)/(0.5*(dsig(k)+dsig(k-1))*dsig(k))
+!      Coef(indx(i,j,k),7) = -(DelxS(i+1,j,k)/(2.*dx*(dsig(k)+dsig(k-1)))+DelxS(i,j,k)/(2.*dx*(dsig(k)+dsig(k-1))))
+!      Coef(indx(i,j,k),8) = -(DelyS(i,j+1,k)/(2.*dy*(dsig(k)+dsig(k-1)))+DelyS(i,j,k)/(2.*dy*(dsig(k)+dsig(k-1))))
+!      Coef(indx(i,j,k),9) = -1./(dx*dx)
+!      Coef(indx(i,j,k),10) = -1./(dy*dy)
+!      Coef(indx(i,j,k),11) = (DelyS(i,j+1,k)/(2.*dy*(dsig(k)+dsig(k-1)))+DelyS(i,j,k)/(2.*dy*(dsig(k)+dsig(k-1))))
+!      Coef(indx(i,j,k),12) = (DelxS(i+1,j,k)/(2.*dx*(dsig(k)+dsig(k-1)))+DelxS(i,j,k)/(2.*dx*(dsig(k)+dsig(k-1))))
+!      Coef(indx(i,j,k),13) = -A1(i,j,k)/(0.5*(dsig(k)+dsig(k-1))*dsig(k-1))
+!      Coef(indx(i,j,k),14) = -(DelxS(i-1,j,k)/(2.*dx*(dsig(k)+dsig(k-1)))+DelxS(i,j,k)/(2.*dx*(dsig(k)+dsig(k-1))))
+!      Coef(indx(i,j,k),15) = -(DelyS(i,j-1,k)/(2.*dy*(dsig(k)+dsig(k-1)))+DelyS(i,j,k)/(2.*dy*(dsig(k)+dsig(k-1))))
+       Coef(neq,1) = (2./(dx*dx)+2./(dy*dy)+A1(i,j,k)/(0.5*(dsig(k)+dsig(k-1))*dsig(k))+  &
                 A1(i,j,k)/(0.5*(dsig(k)+dsig(k-1))*dsig(k-1)))
-       Coef(indx(i,j,k),2) = -1./(dx*dx)
-       Coef(indx(i,j,k),3) = -1./(dy*dy)
-       Coef(indx(i,j,k),4) = (DelyS(i,j-1,k)/(2.*dy*(dsig(k)+dsig(k-1)))+DelyS(i,j,k)/(2.*dy*(dsig(k)+dsig(k-1))))   
-       Coef(indx(i,j,k),5) = (DelxS(i-1,j,k)/(2.*dx*(dsig(k)+dsig(k-1)))+DelxS(i,j,k)/(2.*dx*(dsig(k)+dsig(k-1))))
-       Coef(indx(i,j,k),6) = -A1(i,j,k)/(0.5*(dsig(k)+dsig(k-1))*dsig(k))
-       Coef(indx(i,j,k),7) = -(DelxS(i+1,j,k)/(2.*dx*(dsig(k)+dsig(k-1)))+DelxS(i,j,k)/(2.*dx*(dsig(k)+dsig(k-1))))
-       Coef(indx(i,j,k),8) = -(DelyS(i,j+1,k)/(2.*dy*(dsig(k)+dsig(k-1)))+DelyS(i,j,k)/(2.*dy*(dsig(k)+dsig(k-1))))
-       Coef(indx(i,j,k),9) = -1./(dx*dx)
-       Coef(indx(i,j,k),10) = -1./(dy*dy)
-       Coef(indx(i,j,k),11) = (DelyS(i,j+1,k)/(2.*dy*(dsig(k)+dsig(k-1)))+DelyS(i,j,k)/(2.*dy*(dsig(k)+dsig(k-1))))
-       Coef(indx(i,j,k),12) = (DelxS(i+1,j,k)/(2.*dx*(dsig(k)+dsig(k-1)))+DelxS(i,j,k)/(2.*dx*(dsig(k)+dsig(k-1))))
-       Coef(indx(i,j,k),13) = -A1(i,j,k)/(0.5*(dsig(k)+dsig(k-1))*dsig(k-1))
-       Coef(indx(i,j,k),14) = -(DelxS(i-1,j,k)/(2.*dx*(dsig(k)+dsig(k-1)))+DelxS(i,j,k)/(2.*dx*(dsig(k)+dsig(k-1))))
-       Coef(indx(i,j,k),15) = -(DelyS(i,j-1,k)/(2.*dy*(dsig(k)+dsig(k-1)))+DelyS(i,j,k)/(2.*dy*(dsig(k)+dsig(k-1))))
+       Coef(neq,2) = -1./(dx*dx)
+       Coef(neq,3) = -1./(dy*dy)
+       Coef(neq,4) = (DelyS(i,j-1,k)/(2.*dy*(dsig(k)+dsig(k-1)))+DelyS(i,j,k)/(2.*dy*(dsig(k)+dsig(k-1))))   
+       Coef(neq,5) = (DelxS(i-1,j,k)/(2.*dx*(dsig(k)+dsig(k-1)))+DelxS(i,j,k)/(2.*dx*(dsig(k)+dsig(k-1))))
+       Coef(neq,6) = -A1(i,j,k)/(0.5*(dsig(k)+dsig(k-1))*dsig(k))
+       Coef(neq,7) = -(DelxS(i+1,j,k)/(2.*dx*(dsig(k)+dsig(k-1)))+DelxS(i,j,k)/(2.*dx*(dsig(k)+dsig(k-1))))
+       Coef(neq,8) = -(DelyS(i,j+1,k)/(2.*dy*(dsig(k)+dsig(k-1)))+DelyS(i,j,k)/(2.*dy*(dsig(k)+dsig(k-1))))
+       Coef(neq,9) = -1./(dx*dx)
+       Coef(neq,10) = -1./(dy*dy)
+       Coef(neq,11) = (DelyS(i,j+1,k)/(2.*dy*(dsig(k)+dsig(k-1)))+DelyS(i,j,k)/(2.*dy*(dsig(k)+dsig(k-1))))
+       Coef(neq,12) = (DelxS(i+1,j,k)/(2.*dx*(dsig(k)+dsig(k-1)))+DelxS(i,j,k)/(2.*dx*(dsig(k)+dsig(k-1))))
+       Coef(neq,13) = -A1(i,j,k)/(0.5*(dsig(k)+dsig(k-1))*dsig(k-1))
+       Coef(neq,14) = -(DelxS(i-1,j,k)/(2.*dx*(dsig(k)+dsig(k-1)))+DelxS(i,j,k)/(2.*dx*(dsig(k)+dsig(k-1))))
+       Coef(neq,15) = -(DelyS(i,j-1,k)/(2.*dy*(dsig(k)+dsig(k-1)))+DelyS(i,j,k)/(2.*dy*(dsig(k)+dsig(k-1))))
      enddo
      enddo
      enddo
@@ -605,38 +681,48 @@
 !     enddo
 
 # if defined (OBSTACLE)
+     ! This is a tad more difficult because we're not following exactly the same
+     ! looping index range for i, j, k.  But the indices are easily calculated
+     ! on-the-fly — see the indx_for_ijk() function.  An optimizing Fortran compiler
+     ! will most certainly inline the indx_for_ijk() function, too.
      do i = Ibeg+1,Iend-1
      do j = Jbeg+1,Jend-1
      do k = Kbeg+1,Kend-1
        if(set_flag(i,j,k)==1) then
         ! left 
          if(set_flag(i+1,j,k)==0) then
-           ic = indx(I+1,j,k)
+!           ic = indx(I+1,j,k)
+           ic = indx_for_ijk(i + 1, j, k, Ibeg, Iend, Jbeg, Jend, Kbeg, Kend)
            Coef(ic,1) = Coef(ic,1)+Coef(ic,9)
            Coef(ic,9) = Zero
          ! right 
          elseif(set_flag(i-1,j,k)==0) then
-           ic = indx(I-1,j,k)
+!           ic = indx(I-1,j,k)
+           ic = indx_for_ijk(i - 1, j, k, Ibeg, Iend, Jbeg, Jend, Kbeg, Kend)
            Coef(ic,1) = Coef(ic,1)+Coef(ic,2)
            Coef(ic,2) = Zero
          ! south
          elseif(set_flag(i,j+1,k)==0) then
-           ic = indx(i,J+1,k)
+!           ic = indx(i,J+1,k)
+           ic = indx_for_ijk(i, j + 1, k, Ibeg, Iend, Jbeg, Jend, Kbeg, Kend)
            Coef(ic,1) = Coef(ic,1)+Coef(ic,10)
            Coef(ic,10) = Zero
          ! north
          elseif(set_flag(i,j-1,k)==0) then
-           ic = indx(i,J-1,k)
+!           ic = indx(i,J-1,k)
+           ic = indx_for_ijk(i, j - 1, k, Ibeg, Iend, Jbeg, Jend, Kbeg, Kend)
            Coef(ic,1) = Coef(ic,1)+Coef(ic,3)
            Coef(ic,3) = Zero
          ! bottom
          elseif(set_flag(i,j,k+1)==0) then
-           ic = indx(i,j,k+1)
+!           ic = indx(i,j,k+1)
+           ic = indx_for_ijk(i, j, k + 1, Ibeg, Iend, Jbeg, Jend, Kbeg, Kend)
            Coef(ic,1) = Coef(ic,1)+Coef(ic,13)
            Coef(ic,13) = Zero
          ! upper
          elseif(set_flag(i,j,k-1)==0) then
-           ic = indx(i,j,k-1)
+!           ic = indx(i,j,k-1)
+           ic = indx_for_ijk(i, j, k - 1, Ibeg, Iend, Jbeg, Jend, Kbeg, Kend)
            Coef(ic,1) = Coef(ic,1)+Coef(ic,6)
            Coef(ic,6) = Zero
          endif  
@@ -655,10 +741,11 @@
 # if defined (COUPLING)
     IF(.NOT.IN_DOMAIN_WEST)THEN
 # endif
-     i = Ibeg
+!     i = Ibeg
      do k = Kbeg,Kend
      do j = Jbeg,Jend
-       ic = indx(i,j,k)
+!       ic = indx(i,j,k)
+       ic = indx_for_ijk(Ibeg, j, k, Ibeg, Iend, Jbeg, Jend, Kbeg, Kend)
        Coef(ic,1) = Coef(ic,1)+Coef(ic,9)
        Coef(ic,6) = Coef(ic,6)+Coef(ic,5)
        Coef(ic,13) = Coef(ic,13)+Coef(ic,14)
@@ -681,10 +768,11 @@
 # if defined (COUPLING)
     IF(.NOT.IN_DOMAIN_EAST)THEN
 # endif
-     i = Iend
+!     i = Iend
      do k = Kbeg,Kend
      do j = Jbeg,Jend
-       ic = indx(i,j,k)
+!       ic = indx(i,j,k)
+       ic = indx_for_ijk(Iend, j, k, Ibeg, Iend, Jbeg, Jend, Kbeg, Kend)
        Coef(ic,1) = Coef(ic,1)+Coef(ic,2)
        Coef(ic,6) = Coef(ic,6)+Coef(ic,7)
        Coef(ic,13) = Coef(ic,13)+Coef(ic,12)
@@ -707,10 +795,11 @@
 # if defined (COUPLING)
     IF(.NOT.IN_DOMAIN_SOUTH)THEN
 # endif
-     j = Jbeg
+!     j = Jbeg
      do k = Kbeg,Kend
      do i = Ibeg,Iend
-       ic = indx(i,j,k)         
+!       ic = indx(i,j,k)         
+       ic = indx_for_ijk(i, Jbeg, k, Ibeg, Iend, Jbeg, Jend, Kbeg, Kend)
        Coef(ic,1) = Coef(ic,1)+Coef(ic,10)
        Coef(ic,6) = Coef(ic,6)+Coef(ic,4)
        Coef(ic,13) = Coef(ic,13)+Coef(ic,15)
@@ -733,10 +822,11 @@
 # if defined (COUPLING)
     IF(.NOT.IN_DOMAIN_NORTH)THEN
 # endif
-     j = Jend
+!     j = Jend
      do k = Kbeg,Kend
      do i = Ibeg,Iend
-       ic = indx(i,j,k)
+!       ic = indx(i,j,k)
+       ic = indx_for_ijk(i, Jend, k, Ibeg, Iend, Jbeg, Jend, Kbeg, Kend)
        Coef(ic,1) = Coef(ic,1)+Coef(ic,3)
        Coef(ic,6) = Coef(ic,6)+Coef(ic,8)
        Coef(ic,13) = Coef(ic,13)+Coef(ic,11)
@@ -753,10 +843,11 @@
 # endif
 
      ! bottom side
-     k = Kbeg
+!     k = Kbeg
      do j = Jbeg,Jend
      do i = Ibeg,Iend
-       ic = indx(i,j,k)
+!       ic = indx(i,j,k)
+       ic = indx_for_ijk(i, j, Kbeg, Ibeg, Iend, Jbeg, Jend, Kbeg, Kend)
 # if defined (LANDSLIDE)
        if(SlideType(1:5)=='RIGID') then ! modified by Cheng to identify 2d and 3d landslide
          Rhs(ic) = Rhs(ic)+Rho0*(dsig(Kbeg)+dsig(Kbeg-1))*(Coef(ic,13)*D(i,j)*Delt2H(i,j)+ &
@@ -801,10 +892,11 @@
      enddo
 
      ! top side (Dirichlet boundary)
-     k = Kend
+!     k = Kend
      do j = Jbeg,Jend
      do i = Ibeg,Iend
-       ic = indx(i,j,k)
+!       ic = indx(i,j,k)
+       ic = indx_for_ijk(i, j, Kend, Ibeg, Iend, Jbeg, Jend, Kbeg, Kend)
        Coef(ic,4) = Zero
        Coef(ic,5) = Zero
        Coef(ic,6) = Zero
@@ -814,27 +906,58 @@
      enddo
 
      ! take (i=2,j=2,k=2) to obtain the diagonal information
-     JCoef(1) = indx(Ibeg+1,Jbeg+1,Kbeg+1)-indx(Ibeg+1,Jbeg+1,Kbeg+1)  ! (i,j,k)
-     JCoef(2) = indx(Ibeg+2,Jbeg+1,Kbeg+1)-indx(Ibeg+1,Jbeg+1,Kbeg+1)  ! (i+1,j,k) 
-     JCoef(3) = indx(Ibeg+1,Jbeg+2,Kbeg+1)-indx(Ibeg+1,Jbeg+1,Kbeg+1)  ! (i,j+1,k)
-     JCoef(4) = indx(Ibeg+1,Jbeg,Kbeg+2)-indx(Ibeg+1,Jbeg+1,Kbeg+1)    ! (i,j-1,k+1)
-     JCoef(5) = indx(Ibeg,Jbeg+1,Kbeg+2)-indx(Ibeg+1,Jbeg+1,Kbeg+1)    ! (i-1,j,k+1)
-     JCoef(6) = indx(Ibeg+1,Jbeg+1,Kbeg+2)-indx(Ibeg+1,Jbeg+1,Kbeg+1)  ! (i,j,k+1)
-     JCoef(7) = indx(Ibeg+2,Jbeg+1,Kbeg+2)-indx(Ibeg+1,Jbeg+1,Kbeg+1)  ! (i+1,j,k+1)
-     JCoef(8) = indx(Ibeg+1,Jbeg+2,Kbeg+2)-indx(Ibeg+1,Jbeg+1,Kbeg+1)  ! (i,j+1,k+1)
-     JCoef(9) = indx(Ibeg,Jbeg+1,Kbeg+1)-indx(Ibeg+1,Jbeg+1,Kbeg+1)    ! (i-1,j,k)
-     JCoef(10) = indx(Ibeg+1,Jbeg,Kbeg+1)-indx(Ibeg+1,Jbeg+1,Kbeg+1)   ! (i,j-1,k)
-     JCoef(11) = indx(Ibeg+1,Jbeg+2,Kbeg)-indx(Ibeg+1,Jbeg+1,Kbeg+1)   ! (i,j+1,k-1)
-     JCoef(12) = indx(Ibeg+2,Jbeg+1,Kbeg)-indx(Ibeg+1,Jbeg+1,Kbeg+1)   ! (i+1,j,k-1)
-     JCoef(13) = indx(Ibeg+1,Jbeg+1,Kbeg)-indx(Ibeg+1,Jbeg+1,Kbeg+1)   ! (i,j,k-1)
-     JCoef(14) = indx(Ibeg,Jbeg+1,Kbeg)-indx(Ibeg+1,Jbeg+1,Kbeg+1)     ! (i-1,j,k-1)
-     JCoef(15) = indx(Ibeg+1,Jbeg,Kbeg)-indx(Ibeg+1,Jbeg+1,Kbeg+1)     ! (i,j-1,k-1)
+!     JCoef(1) = indx(Ibeg+1,Jbeg+1,Kbeg+1)-indx(Ibeg+1,Jbeg+1,Kbeg+1)  ! (i,j,k)
+!     JCoef(2) = indx(Ibeg+2,Jbeg+1,Kbeg+1)-indx(Ibeg+1,Jbeg+1,Kbeg+1)  ! (i+1,j,k) 
+!     JCoef(3) = indx(Ibeg+1,Jbeg+2,Kbeg+1)-indx(Ibeg+1,Jbeg+1,Kbeg+1)  ! (i,j+1,k)
+!     JCoef(4) = indx(Ibeg+1,Jbeg,Kbeg+2)-indx(Ibeg+1,Jbeg+1,Kbeg+1)    ! (i,j-1,k+1)
+!     JCoef(5) = indx(Ibeg,Jbeg+1,Kbeg+2)-indx(Ibeg+1,Jbeg+1,Kbeg+1)    ! (i-1,j,k+1)
+!     JCoef(6) = indx(Ibeg+1,Jbeg+1,Kbeg+2)-indx(Ibeg+1,Jbeg+1,Kbeg+1)  ! (i,j,k+1)
+!    JCoef(7) = indx(Ibeg+2,Jbeg+1,Kbeg+2)-indx(Ibeg+1,Jbeg+1,Kbeg+1)  ! (i+1,j,k+1)
+!    JCoef(8) = indx(Ibeg+1,Jbeg+2,Kbeg+2)-indx(Ibeg+1,Jbeg+1,Kbeg+1)  ! (i,j+1,k+1)
+!    JCoef(9) = indx(Ibeg,Jbeg+1,Kbeg+1)-indx(Ibeg+1,Jbeg+1,Kbeg+1)    ! (i-1,j,k)
+!     JCoef(10) = indx(Ibeg+1,Jbeg,Kbeg+1)-indx(Ibeg+1,Jbeg+1,Kbeg+1)   ! (i,j-1,k)
+!     JCoef(11) = indx(Ibeg+1,Jbeg+2,Kbeg)-indx(Ibeg+1,Jbeg+1,Kbeg+1)   ! (i,j+1,k-1)
+!     JCoef(12) = indx(Ibeg+2,Jbeg+1,Kbeg)-indx(Ibeg+1,Jbeg+1,Kbeg+1)   ! (i+1,j,k-1)
+!     JCoef(13) = indx(Ibeg+1,Jbeg+1,Kbeg)-indx(Ibeg+1,Jbeg+1,Kbeg+1)   ! (i,j,k-1)
+!     JCoef(14) = indx(Ibeg,Jbeg+1,Kbeg)-indx(Ibeg+1,Jbeg+1,Kbeg+1)     ! (i-1,j,k-1)
+!     JCoef(15) = indx(Ibeg+1,Jbeg,Kbeg)-indx(Ibeg+1,Jbeg+1,Kbeg+1)     ! (i,j-1,k-1)
+     
+     JCoef(1) = indx_for_ijk(Ibeg+1, Jbeg+1, Kbeg+1, Ibeg, Iend, Jbeg, Jend, Kbeg, Kend) - &
+                indx_for_ijk(Ibeg+1, Jbeg+1, Kbeg+1, Ibeg, Iend, Jbeg, Jend, Kbeg, Kend)  ! (i,j,k)
+     JCoef(2) = indx_for_ijk(Ibeg+2, Jbeg+1, Kbeg+1, Ibeg, Iend, Jbeg, Jend, Kbeg, Kend) - &
+                indx_for_ijk(Ibeg+1, Jbeg+1, Kbeg+1, Ibeg, Iend, Jbeg, Jend, Kbeg, Kend)  ! (i+1,j,k) 
+     JCoef(3) = indx_for_ijk(Ibeg+1, Jbeg+2, Kbeg+1, Ibeg, Iend, Jbeg, Jend, Kbeg, Kend) - &
+                indx_for_ijk(Ibeg+1, Jbeg+1, Kbeg+1, Ibeg, Iend, Jbeg, Jend, Kbeg, Kend)  ! (i,j+1,k)
+     JCoef(4) = indx_for_ijk(Ibeg+1, Jbeg, Kbeg+2, Ibeg, Iend, Jbeg, Jend, Kbeg, Kend) - &
+                indx_for_ijk(Ibeg+1, Jbeg+1, Kbeg+1, Ibeg, Iend, Jbeg, Jend, Kbeg, Kend)    ! (i,j-1,k+1)
+     JCoef(5) = indx_for_ijk(Ibeg, Jbeg+1, Kbeg+2, Ibeg, Iend, Jbeg, Jend, Kbeg, Kend) - &
+                indx_for_ijk(Ibeg+1, Jbeg+1, Kbeg+1, Ibeg, Iend, Jbeg, Jend, Kbeg, Kend)    ! (i-1,j,k+1)
+     JCoef(6) = indx_for_ijk(Ibeg+1, Jbeg+1, Kbeg+2, Ibeg, Iend, Jbeg, Jend, Kbeg, Kend) - &
+                indx_for_ijk(Ibeg+1, Jbeg+1, Kbeg+1, Ibeg, Iend, Jbeg, Jend, Kbeg, Kend)  ! (i,j,k+1)
+     JCoef(7) = indx_for_ijk(Ibeg+2, Jbeg+1, Kbeg+2, Ibeg, Iend, Jbeg, Jend, Kbeg, Kend) - &
+                indx_for_ijk(Ibeg+1, Jbeg+1, Kbeg+1, Ibeg, Iend, Jbeg, Jend, Kbeg, Kend)  ! (i+1,j,k+1)
+     JCoef(8) = indx_for_ijk(Ibeg+1, Jbeg+2, Kbeg+2, Ibeg, Iend, Jbeg, Jend, Kbeg, Kend) - &
+                indx_for_ijk(Ibeg+1, Jbeg+1, Kbeg+1, Ibeg, Iend, Jbeg, Jend, Kbeg, Kend)  ! (i,j+1,k+1)
+     JCoef(9) = indx_for_ijk(Ibeg, Jbeg+1, Kbeg+1, Ibeg, Iend, Jbeg, Jend, Kbeg, Kend) - &
+                indx_for_ijk(Ibeg+1, Jbeg+1, Kbeg+1, Ibeg, Iend, Jbeg, Jend, Kbeg, Kend)    ! (i-1,j,k)
+     JCoef(10) = indx_for_ijk(Ibeg+1, Jbeg, Kbeg+1, Ibeg, Iend, Jbeg, Jend, Kbeg, Kend) - &
+                 indx_for_ijk(Ibeg+1, Jbeg+1, Kbeg+1, Ibeg, Iend, Jbeg, Jend, Kbeg, Kend)   ! (i,j-1,k)
+     JCoef(11) = indx_for_ijk(Ibeg+1, Jbeg+2, Kbeg, Ibeg, Iend, Jbeg, Jend, Kbeg, Kend) - &
+                 indx_for_ijk(Ibeg+1, Jbeg+1, Kbeg+1, Ibeg, Iend, Jbeg, Jend, Kbeg, Kend)   ! (i,j+1,k-1)
+     JCoef(12) = indx_for_ijk(Ibeg+2, Jbeg+1, Kbeg, Ibeg, Iend, Jbeg, Jend, Kbeg, Kend) - &
+                 indx_for_ijk(Ibeg+1, Jbeg+1, Kbeg+1, Ibeg, Iend, Jbeg, Jend, Kbeg, Kend)   ! (i+1,j,k-1)
+     JCoef(13) = indx_for_ijk(Ibeg+1, Jbeg+1, Kbeg, Ibeg, Iend, Jbeg, Jend, Kbeg, Kend) - &
+                 indx_for_ijk(Ibeg+1, Jbeg+1, Kbeg+1, Ibeg, Iend, Jbeg, Jend, Kbeg, Kend)   ! (i,j,k-1)
+     JCoef(14) = indx_for_ijk(Ibeg, Jbeg+1, Kbeg, Ibeg, Iend, Jbeg, Jend, Kbeg, Kend) - &
+                 indx_for_ijk(Ibeg+1, Jbeg+1, Kbeg+1, Ibeg, Iend, Jbeg, Jend, Kbeg, Kend)     ! (i-1,j,k-1)
+     JCoef(15) = indx_for_ijk(Ibeg+1, Jbeg, Kbeg, Ibeg, Iend, Jbeg, Jend, Kbeg, Kend) - &
+                 indx_for_ijk(Ibeg+1, Jbeg+1, Kbeg+1, Ibeg, Iend, Jbeg, Jend, Kbeg, Kend)     ! (i,j-1,k-1)
 
      deallocate(DelxS)
      deallocate(DelyS)
      deallocate(DelzS)
      deallocate(A1) 
-     deallocate(indx)
+!     deallocate(indx)
 
      return
      end subroutine generate_coef_rhs
